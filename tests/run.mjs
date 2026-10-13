@@ -1,6 +1,7 @@
 /* node tests/run.mjs */
 import { buildModel, checkTrains, fmt, tm } from "../src/model.mjs";
 import { STATIONS, SI } from "../src/data/stations.mjs";
+import { buildNetwork, earliest, journeys, lastJourney } from "../src/search.mjs";
 
 let failed = 0, passed = 0;
 function test(name, fn) {
@@ -62,15 +63,115 @@ test("平日のみ：保田6:44発のみ", () => {
   const w = trains.filter(t => t.weekdayOnly);
   eq(w.length, 1); eq(STATIONS[w[0].stops[0].s], "保田"); eq(fmt(w[0].stops[0].dep), "6:44");
 });
-test("君津着の推定（下り 木更津15:17発 → 君津着15:24、発15:44）", () => {
+/* ===== 途中駅の着時刻の推定（着 = min(発, 前駅の発 + 区間の最短所要)） ===== */
+test("推定着：上り 1-16 の館山着が 10:38 より前（九重10:14発）", () => {
+  const t = find("up-awakamogawa-kisarazu", "1-16")[0];
+  const s = stopAt(t, "館山");
+  if (!(s.arr < tm("10:38"))) throw new Error(`館山着 ${fmt(s.arr)}`);
+  eq(s.arrEst, true); eq(fmt(s.dep), "10:38");
+});
+test("推定着：上り 2-03 の君津着が 15:02 より前、下り 1-01 の館山着が 6:32 より前", () => {
+  const a = stopAt(find("up-awakamogawa-kisarazu", "2-03")[0], "君津");
+  if (!(a.arr < tm("15:02"))) throw new Error(`君津着 ${fmt(a.arr)}`);
+  const b = stopAt(find("down-kisarazu-awakamogawa", "1-01")[0], "館山");
+  if (!(b.arr < tm("6:32"))) throw new Error(`館山着 ${fmt(b.arr)}`);
+});
+test("推定着：下り 木更津15:17発 の君津着は 15:44 より前（推定）、発は15:44", () => {
   const t = trains.find(t => t.table === "down-kisarazu-awakamogawa" && fmt(t.stops[0].dep) === "15:17");
   const k = stopAt(t, "君津");
-  eq(fmt(k.arr), "15:24"); eq(fmt(k.dep), "15:44"); eq(k.arrEst, true);
+  if (!(k.arr <= tm("15:24"))) throw new Error(`君津着 ${fmt(k.arr)}`);
+  eq(fmt(k.dep), "15:44"); eq(k.arrEst, true);
+});
+test("推定着：時刻表に「着」がある駅（終点・蘇我）は推定しない", () => {
+  for (const t of trains) for (const s of t.stops) if (s.arrGiven && s.arrEst) throw new Error(`${t.table} ${t.col} ${STATIONS[s.s]}`);
+});
+test("推定着：千葉〜姉ヶ崎（v1 で確認済み）は変わらない", () => {
+  const n = trains.filter(t => t.table.includes("chiba") && t.stops.some(s => s.arrEst)).length;
+  eq(n, 0);
 });
 test("矢印の接続が5本とも列車に結びつく", () => {
   eq(links.length, 5);
   const desc = links.map(l => `${STATIONS[l.at]} ${fmt(l.arr)}→${fmt(l.dep)}`).sort().join(", ");
   eq(desc, "上総湊 8:08→8:09, 館山 6:59→7:10, 館山 7:05→7:16, 館山 7:58→8:01, 館山 8:00→8:01");
+});
+
+/* ===== 検索（バス25分・乗換余裕2分・平日） ===== */
+const net = buildNetwork(model);
+const O = { margin: 2, busMin: 25 };
+const legStr = j => j.legs.map(l => `${STATIONS[l.from]}${fmt(l.dep)}→${STATIONS[l.to]}${fmt(l.arr)}${l.type === "bus" ? "(バス)" : ""}`).join(" / ");
+
+test("君津→千葉 9:42着まで：最終は君津8:07発（千葉9:26着）、その前は7:44発（9:10着）", () => {
+  const list = journeys(net, SI["君津"], SI["千葉"], "arr", tm("9:42"), O);
+  eq(fmt(list[0].dep), "8:07", legStr(list[0])); eq(fmt(list[0].arr), "9:26");
+  eq(fmt(list[1].dep), "7:44", legStr(list[1])); eq(fmt(list[1].arr), "9:10");
+});
+test("千葉→君津の最終：千葉20:29発（姉ヶ崎20:54→バス→長浦21:33発→木更津21:45着/21:50発→君津）", () => {
+  const j = lastJourney(net, SI["千葉"], SI["君津"], O);
+  eq(fmt(j.dep), "20:29", legStr(j));
+  const [a, bus, b, c] = j.legs;
+  eq(j.legs.length, 4, legStr(j));
+  eq(fmt(a.arr), "20:54"); eq(bus.type, "bus"); eq(fmt(bus.arr), "21:19");
+  eq(fmt(b.dep), "21:33"); eq(fmt(b.arr), "21:45"); eq(fmt(c.dep), "21:50");
+  if (!(j.arr >= tm("21:55") && j.arr <= tm("21:58"))) throw new Error(`君津着 ${fmt(j.arr)}`);
+});
+test("木更津→君津（下り）の最終：木更津23:14発", () => {
+  eq(fmt(lastJourney(net, SI["木更津"], SI["君津"], O).dep), "23:14");
+});
+test("長浦→木更津の最終：長浦21:33発（木更津21:45着）", () => {
+  const j = lastJourney(net, SI["長浦"], SI["木更津"], O);
+  eq(fmt(j.dep), "21:33"); eq(fmt(j.arr), "21:45");
+});
+test("バス40分：千葉→君津の最終が千葉20:29発より早くなる", () => {
+  const j = lastJourney(net, SI["千葉"], SI["君津"], { margin: 2, busMin: 40 });
+  if (!(j.dep < tm("20:29"))) throw new Error(`最終 ${fmt(j.dep)}発`);
+});
+test("矢印：館山8:00着→8:01発に、乗換余裕5分でも乗り継げる", () => {
+  const j = earliest(net, SI["木更津"], SI["安房鴨川"], tm("6:40"), { margin: 5, busMin: 25 });
+  eq(fmt(j.arr), "8:48", legStr(j));
+  const k = j.legs.findIndex(l => l.type === "train" && l.from === SI["館山"]);
+  eq(fmt(j.legs[k - 1].arr), "8:00", legStr(j)); eq(fmt(j.legs[k].dep), "8:01"); eq(j.legs[k].linked, true);
+});
+test("矢印：上り 館山7:58→8:01（乗換余裕5分）", () => {
+  const j = earliest(net, SI["安房鴨川"], SI["君津"], tm("7:18"), { margin: 5, busMin: 25 });
+  eq(fmt(j.dep), "7:18", legStr(j)); eq(fmt(j.legs[0].arr), "7:58");
+  eq(j.legs[1].linked, true); eq(fmt(j.legs[1].dep), "8:01");
+  eq(fmt(j.arr), "8:56", legStr(j)); // 君津は青堀8:53発＋最短所要の推定着（発は9:03）
+  eq(j.legs[1].arrEst, true);
+});
+test("矢印：上総湊8:08→8:09（← の接続、乗換余裕2分）", () => {
+  const j = earliest(net, SI["木更津"], SI["館山"], tm("7:41"), O);
+  eq(fmt(j.dep), "7:41", legStr(j)); eq(fmt(j.arr), "8:43");
+  eq(j.legs[1].from, SI["上総湊"]); eq(j.legs[1].linked, true);
+});
+test("矢印でない乗換には余裕がかかる（木更津21:45着→21:50発は余裕5分なら可、8分なら不可）", () => {
+  const ok5 = earliest(net, SI["長浦"], SI["君津"], tm("21:30"), { margin: 5, busMin: 25 });
+  eq(fmt(ok5.legs[1].dep), "21:50", legStr(ok5));
+  const ng8 = earliest(net, SI["長浦"], SI["君津"], tm("21:30"), { margin: 8, busMin: 25 });
+  eq(fmt(ng8.legs[1].dep), "23:14", legStr(ng8));
+});
+test("同じ到着なら遅く出る経路を出す（那古船形→安房鴨川は7:56発、折り返し経路は出さない）", () => {
+  const list = journeys(net, SI["那古船形"], SI["安房鴨川"], "dep", tm("7:02"), { margin: 5, busMin: 25 });
+  eq(fmt(list[0].dep), "7:56", legStr(list[0])); eq(fmt(list[0].arr), "8:48");
+  eq(list[0].legs.length, 2); eq(list[0].legs[1].linked, true);
+});
+test("平日のみ：土休日は保田6:44発に乗れない", () => {
+  const wk = earliest(net, SI["保田"], SI["富浦"], tm("6:30"), O);
+  eq(fmt(wk.dep), "6:44"); eq(fmt(wk.arr), "6:58"); eq(wk.legs[0].weekdayOnly, true);
+  const hol = earliest(buildNetwork(model, { dayType: "holiday" }), SI["保田"], SI["富浦"], tm("6:30"), O);
+  eq(fmt(hol.arr), "7:53", legStr(hol));
+  if (hol.legs.some(l => l.weekdayOnly)) throw new Error(legStr(hol));
+});
+test("姉ヶ崎↔長浦はバスのみ", () => {
+  eq(lastJourney(net, SI["姉ヶ崎"], SI["長浦"], O).busOnly, true);
+  const j = earliest(net, SI["姉ヶ崎"], SI["長浦"], tm("10:00"), O);
+  eq(j.legs.length, 1); eq(j.legs[0].type, "bus"); eq(fmt(j.arr), "10:25");
+});
+test("千葉→安房鴨川：経路が見つかり、駅と時刻がつながっている", () => {
+  const list = journeys(net, SI["千葉"], SI["安房鴨川"], "dep", tm("6:00"), O);
+  if (!list.length) throw new Error("経路なし");
+  for (const j of list) j.legs.forEach((l, k) => {
+    if (k && (l.from !== j.legs[k - 1].to || l.dep < j.legs[k - 1].arr)) throw new Error(legStr(j));
+  });
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

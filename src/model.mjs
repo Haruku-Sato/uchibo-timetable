@@ -13,7 +13,8 @@ export function fmt(x) {
 }
 
 const TIME_RE = /^\d{1,2}[:;]\d{2}$/;
-const KIMITSU_EST_MIN = 7; // 下り 木更津→君津の推定所要（v1 と同じ）
+/* 「着」がない駅で、推定着が発より この分数以上早いときだけ推定値を使う（長い停車とみなす） */
+export const LONG_DWELL_MIN = 3;
 
 /* 行ラベル "蘇我着" → {s, kind:"arr"|"dep"} */
 function parseRow(label) {
@@ -44,8 +45,9 @@ function splitColumn(cells, problems, where) {
 
 /**
  * 全時刻表を読み込み、列車とリンク（矢印の接続）を返す。
- * train: {id, table, col, dir, weekdayOnly, stops:[{s, arr, dep, arrEst?}]}
+ * train: {id, table, col, dir, weekdayOnly, stops:[{s, arr, dep, arrGiven, arrEst?}]}
  *   arr = その駅に着く時刻、dep = その駅を出る時刻（始発駅の arr / 終着駅の dep は同じ値）
+ *   arrGiven = 時刻表に「着」がある、arrEst = 着時刻を推定した（画面では「頃」を付ける）
  * link:  {at, fromTrain, toTrain, arr, dep}  … 乗換余裕に関係なく必ず乗り継げる
  * problems: データの書式上の問題（空なら OK）
  */
@@ -73,17 +75,9 @@ export function buildModel(tables = TABLES) {
           st[kind] = tm(cells[i]);
         }
         for (const st of stops) {
+          st.arrGiven = st.arr !== undefined; // 時刻表に「着」が載っているか
           st.arr ??= st.dep;
           st.dep ??= st.arr;
-        }
-        // 下り 君津着の推定：君津発と「木更津発＋7分」の早いほう（君津で長く停まる便があるため）
-        if (tb.dir === "down") {
-          for (let k = 1; k < stops.length; k++) {
-            if (stops[k].s === SI["君津"] && stops[k - 1].s === SI["木更津"]) {
-              const est = Math.min(stops[k].dep, stops[k - 1].dep + KIMITSU_EST_MIN);
-              if (est !== stops[k].arr) { stops[k].arr = est; stops[k].arrEst = true; }
-            }
-          }
         }
         if (stops.length < 2) { problems.push(`${where}: 停車駅が1つしかない列車`); continue; }
         trains.push({
@@ -95,7 +89,8 @@ export function buildModel(tables = TABLES) {
     for (const lk of tb.links || []) {
       const s = SI[lk.at], a = tm(lk.from), d = tm(lk.to);
       const mine = trains.filter(t => t.table === tb.id);
-      const fromT = mine.filter(t => { const st = t.stops.find(x => x.s === s); return st && st !== t.stops[0] && st.arr === a; });
+      // 着側は時刻表に書かれた時刻（着がなければ発の欄の時刻）で照合する
+      const fromT = mine.filter(t => { const st = t.stops.find(x => x.s === s); return st && st !== t.stops[0] && (st.arrGiven ? st.arr : st.dep) === a; });
       const toT = mine.filter(t => { const st = t.stops.find(x => x.s === s); return st && st !== t.stops.at(-1) && st.dep === d; });
       if (fromT.length !== 1 || toT.length !== 1) {
         problems.push(`${tb.title} 接続 ${lk.at} ${lk.from}→${lk.to}: 列車が特定できない（着${fromT.length}本・発${toT.length}本）`);
@@ -104,7 +99,36 @@ export function buildModel(tables = TABLES) {
       links.push({ at: s, fromTrain: fromT[0].id, toTrain: toT[0].id, arr: a, dep: d });
     }
   }
+  estimateArrivals(trains);
   return { trains, links, problems };
+}
+
+/* 隣り合う駅間（方向つき）の最短所要：全列車での「次駅の着（なければ発）− 前駅の発」の最小値 */
+export function minRunTimes(trains) {
+  const best = new Map();
+  for (const t of trains) {
+    for (let k = 1; k < t.stops.length; k++) {
+      const pv = t.stops[k - 1], st = t.stops[k];
+      const key = pv.s + "-" + st.s;
+      const run = (st.arrGiven ? st.arr : st.dep) - pv.dep;
+      if (!best.has(key) || run < best.get(key)) best.set(key, run);
+    }
+  }
+  return best;
+}
+
+/* 「着」がない駅の着時刻を推定する：着 = min(その駅の発, 前の駅の発 + 最短所要)。
+ * 差が LONG_DWELL_MIN 未満なら推定せず発時刻のまま（普通の停車で「頃」が乱発しないように）。 */
+function estimateArrivals(trains) {
+  const best = minRunTimes(trains);
+  for (const t of trains) {
+    for (let k = 1; k < t.stops.length; k++) {
+      const pv = t.stops[k - 1], st = t.stops[k];
+      if (st.arrGiven) continue;
+      const est = pv.dep + best.get(pv.s + "-" + st.s);
+      if (st.dep - est >= LONG_DWELL_MIN) { st.arr = est; st.arrEst = true; }
+    }
+  }
 }
 
 /* 健全性チェック：駅の並び順と時刻の単調増加。違反を文字列の配列で返す。 */
