@@ -6,6 +6,7 @@
   --accent:#0098d1; --accent-ink:#ffffff; --accent-soft:#e2f3fa;
   --bus:#b86808; --bus-soft:#fcefdc; --warn:#c2361f; --warn-soft:#fbe6e2;
   --est:#6b5bb5; --est-soft:#ece9f8; --ok:#1f7a4d; --ok-soft:#e0f3e8;
+  --sea:#dcecf5; --sea-ink:#6f93a8; --land:#f4f1e6; --coast:#c9c2a8; --sel:#f2b705; --sel-ink:#7a4f00;
   --f-text:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
   --f-time:"Barlow Condensed","BIZ UDPGothic",system-ui,sans-serif;
 }
@@ -13,12 +14,14 @@
   --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
   --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
   --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
-  --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326; color-scheme:dark}}
+  --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326;
+  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
   --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
   --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
-  --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326; color-scheme:dark}
+  --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326;
+  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-text);font-size:15px;line-height:1.55}
 .wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:16px}
@@ -61,12 +64,14 @@ button{font:inherit;cursor:pointer;min-height:44px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .card.best{border-color:var(--accent)}
 .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.meta{display:flex;align-items:flex-start;gap:8px}
+.meta .chips{flex:1 1 auto;min-width:0}
 .t{font-family:var(--f-time);font-weight:700;font-size:32px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em}
 .t small{font-family:var(--f-text);font-size:13px;font-weight:700;margin-left:2px}
 .t small.by{color:var(--bus)}
 .arrow{color:var(--muted);font-size:18px}
-.dur{margin-left:auto;font-size:14px;color:var(--muted);text-align:right}
-.dur b{font-family:var(--f-time);font-size:22px;color:var(--fg);font-weight:600}
+.dur{flex:none;white-space:nowrap;font-size:14px;color:var(--muted);text-align:right;line-height:1.2}
+.dur b{font-family:var(--f-time);font-size:20px;color:var(--fg);font-weight:600}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--fg)}
 .chip.warn{background:var(--warn-soft);color:var(--warn);font-weight:700}
@@ -106,12 +111,71 @@ footer p{margin:0}
   .now.last{margin-left:0;flex:1 1 auto}
   .set-grid{grid-template-columns:1fr}
 }
+/* ===== タブ ===== */
+.view{display:flex;flex-direction:column;gap:16px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.tabs button{border:0;background:transparent;color:var(--muted);font-size:15px;padding:10px 8px;min-height:46px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+/* ===== 路線図 ===== */
+.map-panel{position:sticky;top:env(safe-area-inset-top,0px);z-index:2;max-height:45vh;overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 14px rgb(0 0 0 / .08)}
+.map-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.map-sel{margin:0;font-weight:700;flex:1 1 140px;min-width:0}
+.map-sel .muted{color:var(--muted);font-weight:400}
+.map-big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.map-big .lbl{font-size:13px;font-weight:700;color:var(--accent)}
+.map-big .t{font-size:40px}
+.map-big .arr{font-size:15px;color:var(--muted)}
+.map-big .arr b{font-family:var(--f-time);font-size:22px;color:var(--fg);font-weight:600}
+.map-legs{margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.map-legs .bus{color:var(--bus)}
+.map-legs .wait{display:block;min-height:0;font-size:12px}
+.map-actions{display:flex;gap:8px;flex-wrap:wrap}
+.map-hint{font-size:12px;color:var(--muted);margin:0}
+.map-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+svg.map{display:block;width:100%;height:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+svg.map .sea{fill:var(--sea)}
+svg.map .land{fill:var(--land);stroke:var(--coast);stroke-width:1}
+svg.map .sea-name{fill:var(--sea-ink);font-size:12px;letter-spacing:.3em}
+svg.map .rail{fill:none;stroke:var(--accent);stroke-width:4;stroke-linejoin:round;stroke-linecap:round}
+svg.map .bus-line{fill:none;stroke:var(--bus);stroke-width:3;stroke-dasharray:5 5;stroke-linecap:round}
+svg.map .sel-line{fill:none;stroke:var(--sel);stroke-width:9;stroke-linejoin:round;stroke-linecap:round;opacity:.85}
+svg.map .seg{fill:var(--fg);font-family:var(--f-time);font-weight:600;font-size:11px}
+svg.map .seg.bus{fill:var(--bus);font-family:var(--f-text);font-size:10px;font-weight:700}
+svg.map .seg.none{fill:var(--muted)}
+svg.map .st{cursor:pointer;outline:none}
+svg.map .st circle{fill:var(--surface);stroke:var(--accent);stroke-width:2.5}
+svg.map .st text{fill:var(--fg);font-size:11px}
+svg.map .st.major text{font-weight:700;font-size:12px}
+svg.map .st.on circle{fill:var(--sel);stroke:var(--fg);stroke-width:2}
+svg.map .st.on text{font-weight:700;fill:var(--sel-ink)}
+svg.map .st:focus-visible circle{stroke:var(--fg);stroke-width:3}
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
 
 <div class="wrap">
-  <header><span class="badge">JO 内房線</span><h1>臨時ダイヤ 乗換検索</h1></header>
+  <header><span class="badge">内房線</span><h1>臨時ダイヤ 乗換検索</h1></header>
 
+  <div class="tabs" role="tablist" aria-label="表示の切り替え">
+    <button type="button" role="tab" id="tabSearch" aria-controls="viewSearch" aria-selected="true">検索</button>
+    <button type="button" role="tab" id="tabMap" aria-controls="viewMap" aria-selected="false">路線図・最終</button>
+  </div>
+
+  <section id="viewMap" class="view" role="tabpanel" aria-labelledby="tabMap" hidden>
+    <div class="map-panel" id="mapPanel">
+      <div class="map-head">
+        <p class="map-sel" id="mapSel"></p>
+        <div class="seg" role="group" aria-label="方向">
+          <button type="button" id="dirUp" aria-pressed="false">上り</button>
+          <button type="button" id="dirDown" aria-pressed="true">下り</button>
+        </div>
+      </div>
+      <div id="mapResult" aria-live="polite"></div>
+    </div>
+    <p class="map-hint" id="mapHint"></p>
+    <div class="map-box" id="mapBox"></div>
+  </section>
+
+  <section id="viewSearch" class="view" role="tabpanel" aria-labelledby="tabSearch">
   <form id="f">
     <div class="stations">
       <label for="from">出発駅<select id="from"></select></label>
@@ -155,7 +219,7 @@ footer p{margin:0}
             <label for="busFirst">始発<input type="time" id="busFirst"></label>
             <span class="tilde">〜</span>
             <label for="busLast">最終<input type="time" id="busLast"></label>
-            <button type="button" class="now" id="busClear">指定なし</button>
+            <button type="button" class="now" id="busClear">運行時間をクリア</button>
           </div>
         </div>
       </div>
@@ -164,6 +228,7 @@ footer p{margin:0}
 
   <p class="summary" id="summary" aria-live="polite"></p>
   <div id="results"></div>
+  </section>
 
   <footer>
     <p>時刻表：JR東日本千葉事業本部 臨時ダイヤ（千葉〜姉ヶ崎 9/25〜、長浦〜安房鴨川 10/5〜）。長浦〜木更津と木更津〜安房鴨川は全列車が木更津で乗り換えです。</p>
@@ -781,7 +846,7 @@ const BUS_UNSURE_FROM = 22 * 60, BUS_UNSURE_TO = 6 * 60; // 運行時間が未�
 
 /**
  * 画面に出す注意点をまとめる。
- * transfers[k] … legs[k] と legs[k+1] の間：{wait, tight, linked, est(到着が推定), toBus}
+ * transfers[k] … legs[k] と legs[k+1] の間：{wait, tight, linked(接続列車), est(到着が推定), toBus}
  * busUnsure … 運行時間が未指定のまま、22:00以降／6:00前のバスを使っている
  * busStart  … 最初の区間がバス（出発時刻は時刻表の発車ではなく「この時刻までに乗車」）
  */
@@ -793,7 +858,8 @@ function annotate(j, { busFirst = null, busLast = null } = {}) {
     const toBus = b.type === "bus";
     transfers.push({
       wait, toBus, linked: !!b.linked, est: !!a.arrEst,
-      tight: !toBus && !b.linked && wait <= TIGHT_MIN,
+      // バスで始まる経路は「乗れる最も遅いバス」を逆算しているので、直後の乗換が余裕ちょうどになるのは当然。ギリギリ扱いしない
+      tight: !toBus && !b.linked && !(k === 1 && a.type === "bus") && wait <= TIGHT_MIN,
     });
   }
   const busUnsure = j.legs.some(l => l.type === "bus" &&
@@ -810,8 +876,111 @@ function annotate(j, { busFirst = null, busLast = null } = {}) {
   };
 }
 
+/* ---- src/ui/map.mjs ---- */
+/* ===== 路線図（房総半島 西側の簡略図） =====
+ * 座標は SVG の viewBox 単位。北が上。線の左（西）が東京湾、館山から先は下（南東）が太平洋。
+ * 駅名は海側、区間の最終時刻は陸側に書く。
+ */
+
+
+
+/* 駅の位置（STATIONS と同じ順） */
+const MAP_PTS = [
+  [250, 30], [243, 58], [236, 86], [228, 114], [219, 142], [209, 170], [198, 198], // 千葉〜姉ヶ崎
+  [178, 256], [170, 284], [163, 312], [156, 340],                                   // 長浦〜木更津
+  [150, 368], [143, 396], [136, 424], [129, 452], [122, 480], [116, 508], [111, 536], // 君津〜浜金谷
+  [107, 564], [104, 592], [102, 620], [101, 648], [103, 676], [110, 704],             // 保田〜館山
+  [136, 728], [170, 746],                                                             // 九重・千倉
+  [204, 734], [226, 716], [248, 698], [270, 680], [292, 662], [314, 644],             // 千歳〜安房鴨川
+];
+const VB = { x: 36, y: 0, w: 336, h: 770 };
+const MAP_VIEWBOX = `${VB.x} ${VB.y} ${VB.w} ${VB.h}`;
+/* 大きめに描く駅（終点・乗換駅） */
+const MAJOR = new Set(["千葉", "蘇我", "姉ヶ崎", "長浦", "木更津", "君津", "上総湊", "館山", "安房鴨川"].map(n => STATIONS.indexOf(n)));
+
+/* 陸側の単位法線（進行方向 d=(dx,dy) に対し (dy,-dx)。千葉→安房鴨川の向きで右手が陸） */
+function landNormal(dx, dy) { const l = Math.hypot(dx, dy) || 1; return [dy / l, -dx / l]; }
+function stationNormal(i) {
+  const a = MAP_PTS[Math.max(0, i - 1)], b = MAP_PTS[Math.min(MAP_PTS.length - 1, i + 1)];
+  return landNormal(b[0] - a[0], b[1] - a[1]);
+}
+function anchorFor(nx, th = 0.45) { return nx > th ? "start" : nx < -th ? "end" : "middle"; }
+/* 千倉の折り返しの内側で隣どうしの時刻がぶつからないよう、横にずらす（区間の番号 → [dx, dy]） */
+const SEG_NUDGE = { 24: [-6, 0], 25: [6, 2] };
+const r1 = x => Math.round(x * 10) / 10;
+
+/* 陸地の多角形：線を海側へ少しずらした海岸線＋東側を閉じる */
+function landPath() {
+  const coast = MAP_PTS.map((p, i) => { const [nx, ny] = stationNormal(i); return [p[0] - nx * 9, p[1] - ny * 9]; });
+  const pts = [[262, -10], ...coast, [332, 626], [VB.x + VB.w + 10, 585], [VB.x + VB.w + 10, -10]];
+  return "M" + pts.map(p => `${r1(p[0])},${r1(p[1])}`).join(" L") + " Z";
+}
+
+/**
+ * 隣り合う駅の間ごとの最終（dir "down"＝千葉→安房鴨川の向き、"up"＝逆向き）。
+ * 戻り値: 長さ 31 の配列。{text, bus?, none?}
+ */
+function segmentLasts(net, dir, opts) {
+  const out = [];
+  for (let i = 0; i < STATIONS.length - 1; i++) {
+    const [o, d] = dir === "down" ? [i, i + 1] : [i + 1, i];
+    const j = lastJourney(net, o, d, opts);
+    if (!j) out.push({ text: "—", none: true });
+    else if (j.busOnly) out.push({ text: opts.busLast == null ? "バス" : `バス〜${fmt(opts.busLast)}`, bus: true });
+    else out.push({ text: fmt(j.dep) });
+  }
+  return out;
+}
+
+/**
+ * 路線図の SVG 文字列。sel: {a, b}（選んだ駅。b は null 可）、segs: segmentLasts の結果、dirLabel: "下り"|"上り"
+ */
+function mapSvg({ sel = {}, segs = [], dirLabel = "" } = {}) {
+  const P = MAP_PTS;
+  let s = `<svg class="map" viewBox="${MAP_VIEWBOX}" role="img" aria-label="内房線 路線図（${dirLabel}の区間ごとの最終時刻）">`;
+  s += `<rect class="sea" x="${VB.x}" y="${VB.y}" width="${VB.w}" height="${VB.h}"/>`;
+  s += `<path class="land" d="${landPath()}"/>`;
+  s += `<text class="sea-name" x="62" y="300">東京湾</text><text class="sea-name" x="250" y="758">太平洋</text>`;
+  // 線路（姉ヶ崎〜長浦はバス＝点線）
+  const line = (a, b) => "M" + P.slice(a, b + 1).map(p => p.join(",")).join(" L");
+  s += `<path class="rail" d="${line(0, BUS.a)}"/><path class="rail" d="${line(BUS.b, P.length - 1)}"/>`;
+  s += `<path class="bus-line" d="${line(BUS.a, BUS.b)}"/>`;
+  // 選んだ区間
+  if (sel.a != null && sel.b != null) {
+    const lo = Math.min(sel.a, sel.b), hi = Math.max(sel.a, sel.b);
+    s += `<path class="sel-line" d="${line(lo, hi)}"/>`;
+  }
+  // 区間の最終時刻（陸側）
+  segs.forEach((g, i) => {
+    const a = P[i], b = P[i + 1];
+    const [nx, ny] = landNormal(b[0] - a[0], b[1] - a[1]);
+    const [ddx, ddy] = SEG_NUDGE[i] || [0, 0];
+    const x = (a[0] + b[0]) / 2 + nx * 12 + ddx, y = (a[1] + b[1]) / 2 + ny * 12 + 3.5 + ddy;
+    s += `<text class="seg${g.bus ? " bus" : ""}${g.none ? " none" : ""}" x="${r1(x)}" y="${r1(y)}" text-anchor="${anchorFor(nx, 0.6)}">${g.text}</text>`;
+  });
+  // 駅（海側に駅名）
+  P.forEach((p, i) => {
+    const [nx, ny] = stationNormal(i);
+    const on = i === sel.a || i === sel.b;
+    const cls = `st${MAJOR.has(i) ? " major" : ""}${on ? " on" : ""}`;
+    const lx = p[0] - nx * 10, ly = p[1] - ny * 10 + (ny > 0.45 ? 0 : ny < -0.45 ? 7 : 4);
+    s += `<g class="${cls}" data-i="${i}" tabindex="0" role="button" aria-pressed="${on}" aria-label="${STATIONS[i]}">` +
+      `<circle cx="${p[0]}" cy="${p[1]}" r="${on ? 8 : MAJOR.has(i) ? 6 : 4.5}"/>` +
+      `<text x="${r1(lx)}" y="${r1(ly)}" text-anchor="${anchorFor(-nx)}">${STATIONS[i]}</text></g>`;
+  });
+  return s + "</svg>";
+}
+
+/* SVG 座標で最も近い駅（maxDist 以内）。なければ -1 */
+function nearestStation(x, y, maxDist = 24) {
+  let best = -1, bd = maxDist;
+  MAP_PTS.forEach((p, i) => { const d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+
 /* ---- src/ui/app.mjs ---- */
 /* ===== UI（検索画面） ===== */
+
 
 
 
@@ -831,7 +1000,8 @@ for (const sel of [fromSel, toSel]) {
   }
 }
 
-const state = { mode: "dep", dayType: "weekday", showLast: false };
+const state = { mode: "dep", dayType: "weekday", showLast: false, tab: "search" };
+const mapState = { a: null, b: null, dir: "down" }; // a = 出発駅、b = 到着駅
 
 function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; } }
 function save() {
@@ -839,6 +1009,7 @@ function save() {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       from: fromSel.value, to: toSel.value, mode: state.mode, margin: $("margin").value,
       busMin: $("busMin").value, busFirst: $("busFirst").value, busLast: $("busLast").value,
+      tab: state.tab, mapA: mapState.a, mapB: mapState.b, mapDir: mapState.dir,
     }));
   } catch (e) { /* localStorage が使えなくても動く */ }
 }
@@ -850,6 +1021,11 @@ if (saved.mode === "arr" || saved.mode === "dep") state.mode = saved.mode;
 $("busMin").value = clampBus(saved.busMin ?? BUS.defaultMin);
 $("busFirst").value = saved.busFirst || "";
 $("busLast").value = saved.busLast || "";
+if (saved.tab === "map") state.tab = "map";
+const validSt = v => Number.isInteger(v) && v >= 0 && v < STATIONS.length;
+if (validSt(saved.mapA)) mapState.a = saved.mapA;
+if (validSt(saved.mapB) && saved.mapB !== mapState.a && mapState.a != null) mapState.b = saved.mapB;
+if (saved.mapDir === "up") mapState.dir = "up";
 const dow = new Date().getDay();
 state.dayType = dow === 0 || dow === 6 ? "holiday" : "weekday";
 
@@ -888,6 +1064,11 @@ function busHoursStr(o) {
   if (o.busFirst == null && o.busLast == null) return "運行時間 指定なし";
   return `運行 ${o.busFirst == null ? "指定なし" : fmt(o.busFirst)}〜${o.busLast == null ? "指定なし" : fmt(o.busLast)}`;
 }
+function busStartText(j, o) {
+  const b = j.legs[0], n = j.legs[1];
+  const pre = n ? `${STATIONS[n.from]} ${fmt(n.dep)} 発に乗るには、` : "";
+  return `${pre}${STATIONS[b.from]} ${fmt(b.dep)} までにバスに乗車（${o.busMin}分想定）`;
+}
 const tmHtml = (x, est) => `${fmt(x)}${est ? "<small>頃</small>" : ""}`;
 
 function render(j, i, o, tag) {
@@ -912,7 +1093,7 @@ function render(j, i, o, tag) {
     if (t) {
       let cls = "", txt;
       if (t.toBus) txt = t.wait > 0 ? `バス待ち ${t.wait}分` : "そのままバスへ";
-      else if (t.linked) { cls = " linked"; txt = `乗換 ${t.wait}分・矢印の接続（必ず接続）`; }
+      else if (t.linked) { cls = " linked"; txt = `乗換 ${t.wait}分・接続列車（待ち合わせあり）`; }
       else {
         txt = `乗換 ${t.est ? "約" : ""}${t.wait}分`;
         if (t.est) { cls = " est"; txt += "（到着は推定）"; }
@@ -926,18 +1107,17 @@ function render(j, i, o, tag) {
     `<span class="chip">乗換${j.legs.length - 1}回</span>`,
     a.hasBus ? '<span class="chip bus">バス利用</span>' : "",
     a.weekdayOnly ? '<span class="chip">平日のみの列車</span>' : "",
-    a.transfers.some(t => t.linked) ? '<span class="chip ok">矢印の接続</span>' : "",
+    a.transfers.some(t => t.linked) ? '<span class="chip ok">接続列車</span>' : "",
     a.tight ? '<span class="chip warn">乗換2分以下あり</span>' : "",
     a.estTransfer ? '<span class="chip est">到着時刻は推定</span>' : "",
   ].join("");
   const notes = [
-    a.busStart ? `<p class="note">${STATIONS[j.legs[0].from]} ${fmt(j.dep)} までにバスに乗車（${o.busMin}分想定）。時刻表上の発車時刻ではありません。</p>` : "",
+    a.busStart ? `<p class="note">${busStartText(j, o)}。時刻表上の発車時刻ではありません。</p>` : "",
     a.busUnsure ? `<p class="note">バスの運行時間は未確認です（22時以降・6時前のバスを含みます）。設定で始発・最終を指定できます。</p>` : "",
   ].join("");
   return `<article class="card${i === 0 ? " best" : ""}">
-    <div class="top"><span class="t">${fmt(j.dep)}${a.busStart ? '<small class="by">までに乗車</small>' : ""}</span><span class="arrow">→</span><span class="t">${tmHtml(j.arr, a.arrEst)}</span>
-      <span class="dur"><b>${durStr(j.arr - j.dep)}</b></span></div>
-    <div class="chips">${chips}</div>${notes}
+    <div class="top"><span class="t">${fmt(j.dep)}${a.busStart ? '<small class="by">までに乗車</small>' : ""}</span><span class="arrow">→</span><span class="t">${tmHtml(j.arr, a.arrEst)}</span></div>
+    <div class="meta"><div class="chips">${chips}</div><span class="dur"><b>${durStr(j.arr - j.dep)}</b></span></div>${notes}
     <details class="route"${i === 0 ? " open" : ""}><summary>経路を見る</summary><ol class="legs">${html}</ol></details>
   </article>`;
 }
@@ -947,6 +1127,7 @@ function run() {
   setPressed();
   const o = opts();
   $("setSummary").textContent = `余裕${o.margin}分・バス${o.busMin}分・${busHoursStr(o)}`;
+  if (state.tab === "map") renderMap();
   const from = +fromSel.value, to = +toSel.value;
   const net = NETS[state.dayType];
   const res = $("results"), sum = $("summary");
@@ -974,5 +1155,107 @@ function run() {
   }
   res.innerHTML = list.map((j, i) => render(j, i, o, i === 0 ? (state.mode === "arr" ? "最終" : "先発") : "")).join("");
 }
-run();
+/* ===== タブ ===== */
+function showTab(name) {
+  state.tab = name;
+  $("tabSearch").setAttribute("aria-selected", name === "search");
+  $("tabMap").setAttribute("aria-selected", name === "map");
+  $("viewSearch").hidden = name !== "search";
+  $("viewMap").hidden = name !== "map";
+  run();
+}
+$("tabSearch").onclick = () => showTab("search");
+$("tabMap").onclick = () => showTab("map");
+
+/* ===== 路線図 ===== */
+function legLine(l, o) {
+  if (l.type === "bus") return `<li class="bus">${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${fmt(l.arr)}　バス（${o.busMin}分想定）</li>`;
+  const tr = MODEL.trains[l.train];
+  return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${STATIONS[tr.stops.at(-1).s]}行${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
+}
+function renderMapResult(o) {
+  const { a, b, dir } = mapState;
+  const dirName = dir === "down" ? "下り" : "上り";
+  const sel = $("mapSel"), res = $("mapResult");
+  if (a == null) { sel.innerHTML = '出発駅を<span class="muted">路線図でタップ</span>'; res.innerHTML = ""; return; }
+  if (b == null) { sel.innerHTML = `${STATIONS[a]} → <span class="muted">到着駅をタップ</span>`; res.innerHTML = ""; return; }
+  sel.innerHTML = `${STATIONS[a]} → ${STATIONS[b]} <span class="muted">（${dirName}の最終）</span>`;
+  const j = lastJourney(NETS[state.dayType], a, b, o);
+  const toSearch = '<div class="map-actions"><button type="button" class="now last" id="mapToSearch">検索画面で見る</button></div>';
+  if (!j) { res.innerHTML = '<p class="map-hint">この区間に乗れる列車がありません。</p>'; return; }
+  if (j.busOnly) {
+    res.innerHTML = `<p class="note">バスのみの区間です（${o.busMin}分想定）。${o.busLast == null ? "バスの最終は未確認です。" : `設定上のバス最終は ${fmt(o.busLast)} です。`}</p>`;
+    return;
+  }
+  const an = annotate(j, o);
+  let legs = "";
+  j.legs.forEach((l, k) => {
+    legs += legLine(l, o);
+    const t = an.transfers[k];
+    if (t && !t.toBus) {
+      let txt = `${STATIONS[l.to]}で乗換 ${t.est ? "約" : ""}${t.wait}分`;
+      if (t.linked) txt += "・接続列車（待ち合わせあり）";
+      else if (t.est) txt += "（到着は推定）";
+      if (t.tight) txt += "・ギリギリ";
+      legs += `<li class="wait${t.tight ? " tight" : t.linked ? " linked" : t.est ? " est" : ""}">${txt}</li>`;
+    }
+  });
+  res.innerHTML = `<div class="map-big"><span class="lbl">最終</span><span class="t">${fmt(j.dep)}</span><span class="lbl">${an.busStart ? "までにバス乗車" : "発"}</span>` +
+    `<span class="arr">→ <b>${tmHtml(j.arr, an.arrEst)}</b> 着</span></div>` +
+    `<ol class="map-legs">${legs}</ol>` +
+    (an.busStart ? `<p class="note">${busStartText(j, o)}。時刻表上の発車時刻ではありません。</p>` : "") +
+    (an.busUnsure ? '<p class="note">バスの運行時間は未確認です。設定で始発・最終を指定できます。</p>' : "") +
+    toSearch;
+  $("mapToSearch").onclick = () => {
+    fromSel.value = a; toSel.value = b; state.showLast = true;
+    showTab("search");
+    window.scrollTo(0, 0);
+  };
+}
+function renderMap() {
+  const o = opts();
+  const dirName = mapState.dir === "down" ? "下り" : "上り";
+  $("dirDown").setAttribute("aria-pressed", mapState.dir === "down");
+  $("dirUp").setAttribute("aria-pressed", mapState.dir === "up");
+  const segs = segmentLasts(NETS[state.dayType], mapState.dir, o);
+  $("mapBox").innerHTML = mapSvg({ sel: mapState, segs, dirLabel: dirName });
+  $("mapHint").textContent = `線の横の小さな時刻は、隣の駅まで行ける${dirName}の最終です（${state.dayType === "weekday" ? "平日" : "土休日"}・乗換余裕${o.margin}分・バス${o.busMin}分）。条件は検索画面で変えられます。`;
+  renderMapResult(o);
+}
+function tapStation(i) {
+  const m = mapState;
+  if (m.a == null || m.b != null) { m.a = i; m.b = null; }
+  else if (i === m.a) m.a = null;
+  else { m.b = i; m.dir = i > m.a ? "down" : "up"; fromSel.value = m.a; toSel.value = m.b; }
+  run();
+}
+function setDir(d) {
+  const m = mapState;
+  if (m.dir === d) return;
+  m.dir = d;
+  if (m.a != null && m.b != null) { [m.a, m.b] = [m.b, m.a]; fromSel.value = m.a; toSel.value = m.b; }
+  run();
+}
+$("dirDown").onclick = () => setDir("down");
+$("dirUp").onclick = () => setDir("up");
+$("mapBox").addEventListener("click", e => {
+  const svg = $("mapBox").querySelector("svg");
+  if (!svg || !svg.getScreenCTM) return;
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const i = nearestStation(p.x, p.y);
+  if (i >= 0) tapStation(i);
+});
+$("mapBox").addEventListener("keydown", e => {
+  const g = e.target.closest && e.target.closest("[data-i]");
+  if (!g || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  const i = +g.dataset.i;
+  tapStation(i);
+  const again = $("mapBox").querySelector(`[data-i="${i}"]`);
+  if (again) again.focus();
+});
+
+showTab(state.tab);
 </script>

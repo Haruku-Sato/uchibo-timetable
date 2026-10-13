@@ -3,8 +3,29 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
 
 <div class="wrap">
-  <header><span class="badge">JO 内房線</span><h1>臨時ダイヤ 乗換検索</h1></header>
+  <header><span class="badge">内房線</span><h1>臨時ダイヤ 乗換検索</h1></header>
 
+  <div class="tabs" role="tablist" aria-label="表示の切り替え">
+    <button type="button" role="tab" id="tabSearch" aria-controls="viewSearch" aria-selected="true">検索</button>
+    <button type="button" role="tab" id="tabMap" aria-controls="viewMap" aria-selected="false">路線図・最終</button>
+  </div>
+
+  <section id="viewMap" class="view" role="tabpanel" aria-labelledby="tabMap" hidden>
+    <div class="map-panel" id="mapPanel">
+      <div class="map-head">
+        <p class="map-sel" id="mapSel"></p>
+        <div class="seg" role="group" aria-label="方向">
+          <button type="button" id="dirUp" aria-pressed="false">上り</button>
+          <button type="button" id="dirDown" aria-pressed="true">下り</button>
+        </div>
+      </div>
+      <div id="mapResult" aria-live="polite"></div>
+    </div>
+    <p class="map-hint" id="mapHint"></p>
+    <div class="map-box" id="mapBox"></div>
+  </section>
+
+  <section id="viewSearch" class="view" role="tabpanel" aria-labelledby="tabSearch">
   <form id="f">
     <div class="stations">
       <label for="from">出発駅<select id="from"></select></label>
@@ -48,7 +69,7 @@
             <label for="busFirst">始発<input type="time" id="busFirst"></label>
             <span class="tilde">〜</span>
             <label for="busLast">最終<input type="time" id="busLast"></label>
-            <button type="button" class="now" id="busClear">指定なし</button>
+            <button type="button" class="now" id="busClear">運行時間をクリア</button>
           </div>
         </div>
       </div>
@@ -57,6 +78,7 @@
 
   <p class="summary" id="summary" aria-live="polite"></p>
   <div id="results"></div>
+  </section>
 
   <footer>
     <p>時刻表：JR東日本千葉事業本部 臨時ダイヤ（千葉〜姉ヶ崎 9/25〜、長浦〜安房鴨川 10/5〜）。長浦〜木更津と木更津〜安房鴨川は全列車が木更津で乗り換えです。</p>

@@ -2,6 +2,7 @@
 import { STATIONS, BUS } from "../data/stations.mjs";
 import { buildModel, fmt, tm } from "../model.mjs";
 import { buildNetwork, journeys, lastJourney, annotate } from "../search.mjs";
+import { segmentLasts, mapSvg, nearestStation } from "./map.mjs";
 
 const MODEL = buildModel();
 const NETS = { weekday: buildNetwork(MODEL, { dayType: "weekday" }), holiday: buildNetwork(MODEL, { dayType: "holiday" }) };
@@ -19,7 +20,8 @@ for (const sel of [fromSel, toSel]) {
   }
 }
 
-const state = { mode: "dep", dayType: "weekday", showLast: false };
+const state = { mode: "dep", dayType: "weekday", showLast: false, tab: "search" };
+const mapState = { a: null, b: null, dir: "down" }; // a = 出発駅、b = 到着駅
 
 function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; } }
 function save() {
@@ -27,6 +29,7 @@ function save() {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       from: fromSel.value, to: toSel.value, mode: state.mode, margin: $("margin").value,
       busMin: $("busMin").value, busFirst: $("busFirst").value, busLast: $("busLast").value,
+      tab: state.tab, mapA: mapState.a, mapB: mapState.b, mapDir: mapState.dir,
     }));
   } catch (e) { /* localStorage が使えなくても動く */ }
 }
@@ -38,6 +41,11 @@ if (saved.mode === "arr" || saved.mode === "dep") state.mode = saved.mode;
 $("busMin").value = clampBus(saved.busMin ?? BUS.defaultMin);
 $("busFirst").value = saved.busFirst || "";
 $("busLast").value = saved.busLast || "";
+if (saved.tab === "map") state.tab = "map";
+const validSt = v => Number.isInteger(v) && v >= 0 && v < STATIONS.length;
+if (validSt(saved.mapA)) mapState.a = saved.mapA;
+if (validSt(saved.mapB) && saved.mapB !== mapState.a && mapState.a != null) mapState.b = saved.mapB;
+if (saved.mapDir === "up") mapState.dir = "up";
 const dow = new Date().getDay();
 state.dayType = dow === 0 || dow === 6 ? "holiday" : "weekday";
 
@@ -76,6 +84,11 @@ function busHoursStr(o) {
   if (o.busFirst == null && o.busLast == null) return "運行時間 指定なし";
   return `運行 ${o.busFirst == null ? "指定なし" : fmt(o.busFirst)}〜${o.busLast == null ? "指定なし" : fmt(o.busLast)}`;
 }
+function busStartText(j, o) {
+  const b = j.legs[0], n = j.legs[1];
+  const pre = n ? `${STATIONS[n.from]} ${fmt(n.dep)} 発に乗るには、` : "";
+  return `${pre}${STATIONS[b.from]} ${fmt(b.dep)} までにバスに乗車（${o.busMin}分想定）`;
+}
 const tmHtml = (x, est) => `${fmt(x)}${est ? "<small>頃</small>" : ""}`;
 
 function render(j, i, o, tag) {
@@ -100,7 +113,7 @@ function render(j, i, o, tag) {
     if (t) {
       let cls = "", txt;
       if (t.toBus) txt = t.wait > 0 ? `バス待ち ${t.wait}分` : "そのままバスへ";
-      else if (t.linked) { cls = " linked"; txt = `乗換 ${t.wait}分・矢印の接続（必ず接続）`; }
+      else if (t.linked) { cls = " linked"; txt = `乗換 ${t.wait}分・接続列車（待ち合わせあり）`; }
       else {
         txt = `乗換 ${t.est ? "約" : ""}${t.wait}分`;
         if (t.est) { cls = " est"; txt += "（到着は推定）"; }
@@ -114,18 +127,17 @@ function render(j, i, o, tag) {
     `<span class="chip">乗換${j.legs.length - 1}回</span>`,
     a.hasBus ? '<span class="chip bus">バス利用</span>' : "",
     a.weekdayOnly ? '<span class="chip">平日のみの列車</span>' : "",
-    a.transfers.some(t => t.linked) ? '<span class="chip ok">矢印の接続</span>' : "",
+    a.transfers.some(t => t.linked) ? '<span class="chip ok">接続列車</span>' : "",
     a.tight ? '<span class="chip warn">乗換2分以下あり</span>' : "",
     a.estTransfer ? '<span class="chip est">到着時刻は推定</span>' : "",
   ].join("");
   const notes = [
-    a.busStart ? `<p class="note">${STATIONS[j.legs[0].from]} ${fmt(j.dep)} までにバスに乗車（${o.busMin}分想定）。時刻表上の発車時刻ではありません。</p>` : "",
+    a.busStart ? `<p class="note">${busStartText(j, o)}。時刻表上の発車時刻ではありません。</p>` : "",
     a.busUnsure ? `<p class="note">バスの運行時間は未確認です（22時以降・6時前のバスを含みます）。設定で始発・最終を指定できます。</p>` : "",
   ].join("");
   return `<article class="card${i === 0 ? " best" : ""}">
-    <div class="top"><span class="t">${fmt(j.dep)}${a.busStart ? '<small class="by">までに乗車</small>' : ""}</span><span class="arrow">→</span><span class="t">${tmHtml(j.arr, a.arrEst)}</span>
-      <span class="dur"><b>${durStr(j.arr - j.dep)}</b></span></div>
-    <div class="chips">${chips}</div>${notes}
+    <div class="top"><span class="t">${fmt(j.dep)}${a.busStart ? '<small class="by">までに乗車</small>' : ""}</span><span class="arrow">→</span><span class="t">${tmHtml(j.arr, a.arrEst)}</span></div>
+    <div class="meta"><div class="chips">${chips}</div><span class="dur"><b>${durStr(j.arr - j.dep)}</b></span></div>${notes}
     <details class="route"${i === 0 ? " open" : ""}><summary>経路を見る</summary><ol class="legs">${html}</ol></details>
   </article>`;
 }
@@ -135,6 +147,7 @@ function run() {
   setPressed();
   const o = opts();
   $("setSummary").textContent = `余裕${o.margin}分・バス${o.busMin}分・${busHoursStr(o)}`;
+  if (state.tab === "map") renderMap();
   const from = +fromSel.value, to = +toSel.value;
   const net = NETS[state.dayType];
   const res = $("results"), sum = $("summary");
@@ -162,4 +175,106 @@ function run() {
   }
   res.innerHTML = list.map((j, i) => render(j, i, o, i === 0 ? (state.mode === "arr" ? "最終" : "先発") : "")).join("");
 }
-run();
+/* ===== タブ ===== */
+function showTab(name) {
+  state.tab = name;
+  $("tabSearch").setAttribute("aria-selected", name === "search");
+  $("tabMap").setAttribute("aria-selected", name === "map");
+  $("viewSearch").hidden = name !== "search";
+  $("viewMap").hidden = name !== "map";
+  run();
+}
+$("tabSearch").onclick = () => showTab("search");
+$("tabMap").onclick = () => showTab("map");
+
+/* ===== 路線図 ===== */
+function legLine(l, o) {
+  if (l.type === "bus") return `<li class="bus">${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${fmt(l.arr)}　バス（${o.busMin}分想定）</li>`;
+  const tr = MODEL.trains[l.train];
+  return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${STATIONS[tr.stops.at(-1).s]}行${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
+}
+function renderMapResult(o) {
+  const { a, b, dir } = mapState;
+  const dirName = dir === "down" ? "下り" : "上り";
+  const sel = $("mapSel"), res = $("mapResult");
+  if (a == null) { sel.innerHTML = '出発駅を<span class="muted">路線図でタップ</span>'; res.innerHTML = ""; return; }
+  if (b == null) { sel.innerHTML = `${STATIONS[a]} → <span class="muted">到着駅をタップ</span>`; res.innerHTML = ""; return; }
+  sel.innerHTML = `${STATIONS[a]} → ${STATIONS[b]} <span class="muted">（${dirName}の最終）</span>`;
+  const j = lastJourney(NETS[state.dayType], a, b, o);
+  const toSearch = '<div class="map-actions"><button type="button" class="now last" id="mapToSearch">検索画面で見る</button></div>';
+  if (!j) { res.innerHTML = '<p class="map-hint">この区間に乗れる列車がありません。</p>'; return; }
+  if (j.busOnly) {
+    res.innerHTML = `<p class="note">バスのみの区間です（${o.busMin}分想定）。${o.busLast == null ? "バスの最終は未確認です。" : `設定上のバス最終は ${fmt(o.busLast)} です。`}</p>`;
+    return;
+  }
+  const an = annotate(j, o);
+  let legs = "";
+  j.legs.forEach((l, k) => {
+    legs += legLine(l, o);
+    const t = an.transfers[k];
+    if (t && !t.toBus) {
+      let txt = `${STATIONS[l.to]}で乗換 ${t.est ? "約" : ""}${t.wait}分`;
+      if (t.linked) txt += "・接続列車（待ち合わせあり）";
+      else if (t.est) txt += "（到着は推定）";
+      if (t.tight) txt += "・ギリギリ";
+      legs += `<li class="wait${t.tight ? " tight" : t.linked ? " linked" : t.est ? " est" : ""}">${txt}</li>`;
+    }
+  });
+  res.innerHTML = `<div class="map-big"><span class="lbl">最終</span><span class="t">${fmt(j.dep)}</span><span class="lbl">${an.busStart ? "までにバス乗車" : "発"}</span>` +
+    `<span class="arr">→ <b>${tmHtml(j.arr, an.arrEst)}</b> 着</span></div>` +
+    `<ol class="map-legs">${legs}</ol>` +
+    (an.busStart ? `<p class="note">${busStartText(j, o)}。時刻表上の発車時刻ではありません。</p>` : "") +
+    (an.busUnsure ? '<p class="note">バスの運行時間は未確認です。設定で始発・最終を指定できます。</p>' : "") +
+    toSearch;
+  $("mapToSearch").onclick = () => {
+    fromSel.value = a; toSel.value = b; state.showLast = true;
+    showTab("search");
+    window.scrollTo(0, 0);
+  };
+}
+function renderMap() {
+  const o = opts();
+  const dirName = mapState.dir === "down" ? "下り" : "上り";
+  $("dirDown").setAttribute("aria-pressed", mapState.dir === "down");
+  $("dirUp").setAttribute("aria-pressed", mapState.dir === "up");
+  const segs = segmentLasts(NETS[state.dayType], mapState.dir, o);
+  $("mapBox").innerHTML = mapSvg({ sel: mapState, segs, dirLabel: dirName });
+  $("mapHint").textContent = `線の横の小さな時刻は、隣の駅まで行ける${dirName}の最終です（${state.dayType === "weekday" ? "平日" : "土休日"}・乗換余裕${o.margin}分・バス${o.busMin}分）。条件は検索画面で変えられます。`;
+  renderMapResult(o);
+}
+function tapStation(i) {
+  const m = mapState;
+  if (m.a == null || m.b != null) { m.a = i; m.b = null; }
+  else if (i === m.a) m.a = null;
+  else { m.b = i; m.dir = i > m.a ? "down" : "up"; fromSel.value = m.a; toSel.value = m.b; }
+  run();
+}
+function setDir(d) {
+  const m = mapState;
+  if (m.dir === d) return;
+  m.dir = d;
+  if (m.a != null && m.b != null) { [m.a, m.b] = [m.b, m.a]; fromSel.value = m.a; toSel.value = m.b; }
+  run();
+}
+$("dirDown").onclick = () => setDir("down");
+$("dirUp").onclick = () => setDir("up");
+$("mapBox").addEventListener("click", e => {
+  const svg = $("mapBox").querySelector("svg");
+  if (!svg || !svg.getScreenCTM) return;
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const i = nearestStation(p.x, p.y);
+  if (i >= 0) tapStation(i);
+});
+$("mapBox").addEventListener("keydown", e => {
+  const g = e.target.closest && e.target.closest("[data-i]");
+  if (!g || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  const i = +g.dataset.i;
+  tapStation(i);
+  const again = $("mapBox").querySelector(`[data-i="${i}"]`);
+  if (again) again.focus();
+});
+
+showTab(state.tab);

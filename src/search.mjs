@@ -135,7 +135,7 @@ export const BUS_UNSURE_FROM = 22 * 60, BUS_UNSURE_TO = 6 * 60; // 運行時間�
 
 /**
  * 画面に出す注意点をまとめる。
- * transfers[k] … legs[k] と legs[k+1] の間：{wait, tight, linked, est(到着が推定), toBus}
+ * transfers[k] … legs[k] と legs[k+1] の間：{wait, tight, linked(接続列車), est(到着が推定), toBus}
  * busUnsure … 運行時間が未指定のまま、22:00以降／6:00前のバスを使っている
  * busStart  … 最初の区間がバス（出発時刻は時刻表の発車ではなく「この時刻までに乗車」）
  */
@@ -147,7 +147,8 @@ export function annotate(j, { busFirst = null, busLast = null } = {}) {
     const toBus = b.type === "bus";
     transfers.push({
       wait, toBus, linked: !!b.linked, est: !!a.arrEst,
-      tight: !toBus && !b.linked && wait <= TIGHT_MIN,
+      // バスで始まる経路は「乗れる最も遅いバス」を逆算しているので、直後の乗換が余裕ちょうどになるのは当然。ギリギリ扱いしない
+      tight: !toBus && !b.linked && !(k === 1 && a.type === "bus") && wait <= TIGHT_MIN,
     });
   }
   const busUnsure = j.legs.some(l => l.type === "bus" &&

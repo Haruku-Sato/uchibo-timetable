@@ -12,6 +12,7 @@ const MODULES = [
   "src/data/timetable.mjs",
   "src/model.mjs",
   "src/search.mjs",
+  "src/ui/map.mjs",
   "src/ui/app.mjs",
 ];
 
