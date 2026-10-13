@@ -4,7 +4,7 @@
   --accent:#0098d1; --accent-ink:#ffffff; --accent-soft:#e2f3fa;
   --bus:#b86808; --bus-soft:#fcefdc; --warn:#c2361f; --warn-soft:#fbe6e2;
   --est:#6b5bb5; --est-soft:#ece9f8; --ok:#1f7a4d; --ok-soft:#e0f3e8;
-  --sea:#dcecf5; --sea-ink:#6f93a8; --land:#f4f1e6; --coast:#c9c2a8; --sel:#f2b705; --sel-ink:#7a4f00;
+  --sea:#dcecf5; --sea-ink:#6f93a8; --land:#f4f1e6; --coast:#c9c2a8; --sel:#f2b705; --sel-ink:#7a4f00; --bus-ink:#a85c00;
   --f-text:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
   --f-time:"Barlow Condensed","BIZ UDPGothic",system-ui,sans-serif;
 }
@@ -13,13 +13,13 @@
   --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
   --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
   --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326;
-  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; color-scheme:dark}}
+  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; --bus-ink:#ffb866; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
   --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
   --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
   --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326;
-  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; color-scheme:dark}
+  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; --bus-ink:#ffb866; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-text);font-size:15px;line-height:1.55}
 .wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:16px}
@@ -115,13 +115,20 @@ footer p{margin:0}
 .tabs button{border:0;background:transparent;color:var(--muted);font-size:15px;padding:10px 8px;min-height:46px}
 .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
 /* ===== 路線図 ===== */
-.map-panel{position:sticky;top:env(safe-area-inset-top,0px);z-index:2;max-height:45vh;overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 14px rgb(0 0 0 / .08)}
+.map-panel{position:sticky;top:env(safe-area-inset-top,0px);z-index:2;max-height:55vh;overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;gap:4px;box-shadow:0 4px 14px rgb(0 0 0 / .08)}
+.map-panel .seg button{padding:6px 12px;min-height:44px}
+.map-detail summary{cursor:pointer;font-size:13px;color:var(--accent);list-style:none;min-height:32px;display:flex;align-items:center}
+.map-detail summary::-webkit-details-marker{display:none}
+.map-detail summary::before{content:"▸ ";white-space:pre}
+.map-detail[open] summary::before{content:"▾ ";}
+.map-detail > div{display:flex;flex-direction:column;gap:8px;padding-bottom:4px}
+.map-chip{font-size:11px;font-weight:700;color:var(--bus);margin-left:6px}
 .map-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .map-sel{margin:0;font-weight:700;flex:1 1 140px;min-width:0}
 .map-sel .muted{color:var(--muted);font-weight:400}
-.map-big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.map-big{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;line-height:1.1}
 .map-big .lbl{font-size:13px;font-weight:700;color:var(--accent)}
-.map-big .t{font-size:40px}
+.map-big .t{font-size:34px}
 .map-big .arr{font-size:15px;color:var(--muted)}
 .map-big .arr b{font-family:var(--f-time);font-size:22px;color:var(--fg);font-weight:600}
 .map-legs{margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
@@ -137,8 +144,13 @@ svg.map .sea-name{fill:var(--sea-ink);font-size:12px;letter-spacing:.3em}
 svg.map .rail{fill:none;stroke:var(--accent);stroke-width:4;stroke-linejoin:round;stroke-linecap:round}
 svg.map .bus-line{fill:none;stroke:var(--bus);stroke-width:3;stroke-dasharray:5 5;stroke-linecap:round}
 svg.map .sel-line{fill:none;stroke:var(--sel);stroke-width:9;stroke-linejoin:round;stroke-linecap:round;opacity:.85}
+svg.map .sel-line.bus{stroke-width:7;stroke-dasharray:6 6;stroke-linecap:butt;opacity:1}
+/* 文字の縁取り（陸の色）で、線や丸の近くでも読めるようにする */
+svg.map text{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-linejoin:round}
+svg.map .sea-name{stroke:none}
+svg.map .st text{stroke:var(--sea)}
 svg.map .seg{fill:var(--fg);font-family:var(--f-time);font-weight:600;font-size:11px}
-svg.map .seg.bus{fill:var(--bus);font-family:var(--f-text);font-size:10px;font-weight:700}
+svg.map .seg.bus{fill:var(--bus-ink);font-family:var(--f-text);font-size:11px;font-weight:700}
 svg.map .seg.none{fill:var(--muted)}
 svg.map .st{cursor:pointer;outline:none}
 svg.map .st circle{fill:var(--surface);stroke:var(--accent);stroke-width:2.5}

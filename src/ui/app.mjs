@@ -21,7 +21,7 @@ for (const sel of [fromSel, toSel]) {
 }
 
 const state = { mode: "dep", dayType: "weekday", showLast: false, tab: "search" };
-const mapState = { a: null, b: null, dir: "down" }; // a = 出発駅、b = 到着駅
+const mapState = { a: null, b: null, dir: "down", detail: false }; // a = 出発駅、b = 到着駅、detail = 内訳を開いているか
 
 function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; } }
 function save() {
@@ -220,12 +220,16 @@ function renderMapResult(o) {
       legs += `<li class="wait${t.tight ? " tight" : t.linked ? " linked" : t.est ? " est" : ""}">${txt}</li>`;
     }
   });
+  // 閉じた状態は「最終 20:29 発 → 21:58 着」の1行だけ。内訳・注意・ボタンは「内訳を見る」の中
+  const flags = [an.tight ? "ギリギリあり" : "", an.busUnsure ? "バス時間未確認" : ""].filter(Boolean).join("・");
   res.innerHTML = `<div class="map-big"><span class="lbl">最終</span><span class="t">${fmt(j.dep)}</span><span class="lbl">${an.busStart ? "までにバス乗車" : "発"}</span>` +
     `<span class="arr">→ <b>${tmHtml(j.arr, an.arrEst)}</b> 着</span></div>` +
+    `<details class="map-detail" id="mapDetail"${mapState.detail ? " open" : ""}><summary>内訳を見る（乗換${j.legs.length - 1}回）${flags ? `<span class="map-chip">${flags}</span>` : ""}</summary><div>` +
     `<ol class="map-legs">${legs}</ol>` +
     (an.busStart ? `<p class="note">${busStartText(j, o)}。時刻表上の発車時刻ではありません。</p>` : "") +
     (an.busUnsure ? '<p class="note">バスの運行時間は未確認です。設定で始発・最終を指定できます。</p>' : "") +
-    toSearch;
+    toSearch + "</div></details>";
+  $("mapDetail").addEventListener("toggle", e => { mapState.detail = e.target.open; });
   $("mapToSearch").onclick = () => {
     fromSel.value = a; toSel.value = b; state.showLast = true;
     showTab("search");

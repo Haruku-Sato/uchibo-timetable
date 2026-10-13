@@ -3,7 +3,7 @@ import { buildModel, checkTrains, fmt, tm } from "../src/model.mjs";
 import { STATIONS, SI } from "../src/data/stations.mjs";
 import { buildNetwork, earliest, journeys, lastJourney, annotate } from "../src/search.mjs";
 import { build, bundleScript } from "../build.mjs";
-import { segmentLasts, mapSvg, nearestStation, MAP_PTS, MAP_VIEWBOX } from "../src/ui/map.mjs";
+import { segmentLasts, mapSvg, mapLayout, nearestStation, textBox, FONT, MAP_PTS, MAP_VIEWBOX } from "../src/ui/map.mjs";
 import vm from "node:vm";
 
 let failed = 0, passed = 0;
@@ -255,36 +255,52 @@ test("路線図：SVG に32駅・点線のバス区間・選択区間・31個の
   const svg = mapSvg({ sel: { a: 0, b: SI["君津"] }, segs: segmentLasts(net, "down", O), dirLabel: "下り" });
   eq((svg.match(/<g class="st/g) || []).length, 32);
   eq((svg.match(/class="bus-line"/g) || []).length, 1);
-  eq((svg.match(/class="sel-line"/g) || []).length, 1);
+  eq((svg.match(/class="sel-line( bus)?"/g) || []).length, 3); // 千葉〜姉ヶ崎、バス、長浦〜君津
   eq((svg.match(/<text class="seg/g) || []).length, 31);
   eq((svg.match(/aria-pressed="true"/g) || []).length, 2);
   if (/NaN|undefined/.test(svg)) throw new Error("NaN/undefined を含む");
 });
 
-test("路線図：文字どうしが重ならず、枠からはみ出さず、線路にかからない（文字幅は概算）", () => {
+test("路線図：文字どうし・文字と駅の丸・文字と線路が重ならず、枠からはみ出さない（文字幅は概算）", () => {
   const [vx, vy, vw, vh] = MAP_VIEWBOX.split(" ").map(Number);
-  const probs = [];
-  for (const o of [O, { ...O, busLast: tm("21:30") }]) for (const dir of ["down", "up"]) for (const dayType of ["weekday", "holiday"]) {
-    const svg = mapSvg({ segs: segmentLasts(buildNetwork(model, { dayType }), dir, o) });
-    const boxes = [];
-    const push = (c, x, y, a, str) => {
-      const fs = c === "st" || c.includes("sea") ? 12 : c.includes("bus") ? 10 : 11; // CSS の font-size と同じ
-      const w = [...str].reduce((q, ch) => q + (ch.charCodeAt(0) > 255 ? fs : fs * 0.5), 0) + (c.includes("sea") ? fs * 0.9 : 0);
-      const x0 = a === "start" ? x : a === "end" ? x - w : x - w / 2;
-      boxes.push({ str, x0, x1: x0 + w, y0: y - fs * 0.85, y1: y + fs * 0.15 });
-    };
-    for (const t of svg.matchAll(/<text class="([^"]*)" x="([\d.]+)" y="([\d.]+)"(?: text-anchor="(\w+)")?>([^<]+)</g)) push(t[1], +t[2], +t[3], t[4] || "start", t[5]);
-    for (const t of svg.matchAll(/<text x="([\d.]+)" y="([\d.]+)" text-anchor="(\w+)">([^<]+)</g)) push("st", +t[1], +t[2], t[3], t[4]);
-    boxes.forEach((a, i) => boxes.slice(i + 1).forEach(b => {
-      if (a.x0 < b.x1 - 1 && b.x0 < a.x1 - 1 && a.y0 < b.y1 - 1 && b.y0 < a.y1 - 1) probs.push(`${dir} 重なり ${a.str} / ${b.str}`);
-    }));
-    for (const b of boxes) if (b.x0 < vx || b.x1 > vx + vw || b.y0 < vy || b.y1 > vy + vh) probs.push(`${dir} はみ出し ${b.str}`);
-    for (const b of boxes) outer: for (let i = 0; i < MAP_PTS.length - 1; i++) for (let k = 0; k <= 10; k++) {
-      const x = MAP_PTS[i][0] + (MAP_PTS[i + 1][0] - MAP_PTS[i][0]) * k / 10, y = MAP_PTS[i][1] + (MAP_PTS[i + 1][1] - MAP_PTS[i][1]) * k / 10;
-      if (x > b.x0 + 1 && x < b.x1 - 1 && y > b.y0 + 1 && y < b.y1 - 1) { probs.push(`${dir} 線と重なる ${b.str}`); break outer; }
+  const GAP = 1.5; // 箱どうしの最小のすき間
+  const probs = new Set();
+  const hit = (a, b) => a.x0 < b.x1 + GAP && b.x0 < a.x1 + GAP && a.y0 < b.y1 + GAP && b.y0 < a.y1 + GAP;
+  const boxCircle = (b, c) => Math.hypot(Math.max(b.x0 - c.x, 0, c.x - b.x1), Math.max(b.y0 - c.y, 0, c.y - b.y1)) < c.r + 1.5 + GAP;
+  const sels = [{}, { a: SI["館山"], b: SI["千歳"] }, { a: SI["九重"], b: SI["千倉"] }, { a: 0, b: SI["安房鴨川"] }];
+  for (const o of [O, { ...O, busLast: tm("21:30") }]) for (const dir of ["down", "up"]) for (const dayType of ["weekday", "holiday"]) for (const sel of sels) {
+    const L = mapLayout(segmentLasts(buildNetwork(model, { dayType }), dir, o), sel);
+    const texts = [
+      ...L.stations.map(st => ({ str: STATIONS[st.i], box: st.label.box })),
+      ...L.segs.map(g => ({ str: g.text, box: g.box })),
+      { str: "東京湾", box: textBox(62, 300, "start", "東京湾", FONT.sea + 3) }, // letter-spacing ぶん広めに
+      { str: "太平洋", box: textBox(222, 790, "start", "太平洋", FONT.sea + 3) },
+    ];
+    texts.forEach((a, i) => texts.slice(i + 1).forEach(b => { if (hit(a.box, b.box)) probs.add(`${dir} 文字の重なり ${a.str} / ${b.str}`); }));
+    for (const t of texts) {
+      const b = t.box;
+      if (b.x0 < vx || b.x1 > vx + vw || b.y0 < vy + 2 || b.y1 > vy + vh - 6) probs.add(`${dir} 枠に近い ${t.str}`);
+      for (const c of L.stations) if (boxCircle(b, c) && t.str !== STATIONS[c.i]) probs.add(`${dir} 丸と重なる ${t.str} / ${STATIONS[c.i]}の丸`);
+      outer: for (let i = 0; i < MAP_PTS.length - 1; i++) for (let k = 0; k <= 20; k++) {
+        const x = MAP_PTS[i][0] + (MAP_PTS[i + 1][0] - MAP_PTS[i][0]) * k / 20, y = MAP_PTS[i][1] + (MAP_PTS[i + 1][1] - MAP_PTS[i][1]) * k / 20;
+        if (x > b.x0 - 2 && x < b.x1 + 2 && y > b.y0 - 2 && y < b.y1 + 2) { probs.add(`${dir} 線と重なる ${t.str}`); break outer; }
+      }
     }
   }
-  noProblems([...new Set(probs)]);
+  noProblems([...probs]);
+});
+test("路線図：駅名の文字の上をタップしても、その駅が選ばれる", () => {
+  for (const st of mapLayout().stations) {
+    const b = st.label.box;
+    eq(nearestStation((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2), st.i, `${STATIONS[st.i]}の駅名の中央`);
+    eq(nearestStation(st.label.anchor === "end" ? b.x0 + 2 : b.x1 - 2, (b.y0 + b.y1) / 2), st.i, `${STATIONS[st.i]}の駅名の端`);
+  }
+});
+test("路線図：選んだ区間がバスを含むとき、バス部分は点線（sel-line bus）で描く", () => {
+  const svg = mapSvg({ sel: { a: 0, b: SI["君津"] }, segs: [] });
+  eq((svg.match(/class="sel-line bus"/g) || []).length, 1);
+  eq((svg.match(/class="sel-line"/g) || []).length, 2);
+  eq((mapSvg({ sel: { a: SI["長浦"], b: SI["君津"] } }).match(/class="sel-line bus"/g) || []).length, 0);
 });
 
 /* ===== ビルド（dist/index.html） ===== */
@@ -329,6 +345,7 @@ test("ビルド：スクリプトが構文エラーなし、偽の DOM 上で動
   const key = i => el("mapBox").listeners.keydown({ key: "Enter", preventDefault() {}, target: { closest: () => ({ dataset: { i: String(i) } }) } });
   key(0); key(SI["君津"]);
   if (!el("mapResult").innerHTML.includes("20:29")) throw new Error("千葉→君津の最終が出ない:\n" + el("mapResult").innerHTML.slice(0, 300));
+  if (!el("mapResult").innerHTML.includes('<details class="map-detail" id="mapDetail">')) throw new Error("内訳が最初から開いている／ない");
   el("dirUp").onclick(); // 上りに切り替え → 君津→千葉
   if (!el("mapSel").innerHTML.startsWith("君津 → 千葉")) throw new Error(el("mapSel").innerHTML);
   eq(el("from").value, SI["君津"]); eq(el("to").value, 0);
