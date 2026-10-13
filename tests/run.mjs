@@ -347,7 +347,7 @@ test("ビルド：スクリプトが構文エラーなし、偽の DOM 上で動
   if (!el("mapResult").innerHTML.includes("20:29")) throw new Error("千葉→君津の最終が出ない:\n" + el("mapResult").innerHTML.slice(0, 300));
   if (!el("mapResult").innerHTML.includes('<details class="map-detail" id="mapDetail">')) throw new Error("内訳が最初から開いている／ない");
   el("dirUp").onclick(); // 上りに切り替え → 君津→千葉
-  if (!el("mapSel").innerHTML.startsWith("君津 → 千葉")) throw new Error(el("mapSel").innerHTML);
+  eq(el("mapSel").textContent, "君津 → 千葉"); // 見出しに「（上りの最終）」は付けない
   eq(el("from").value, SI["君津"]); eq(el("to").value, 0);
 });
 

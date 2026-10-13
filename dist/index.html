@@ -126,7 +126,7 @@ footer p{margin:0}
 .map-detail > div{display:flex;flex-direction:column;gap:8px;padding-bottom:4px}
 .map-chip{font-size:11px;font-weight:700;color:var(--bus);margin-left:6px}
 .map-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.map-sel{margin:0;font-weight:700;flex:1 1 140px;min-width:0}
+.map-sel{margin:0;font-weight:700;flex:1 1 140px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .map-sel .muted{color:var(--muted);font-weight:400}
 .map-big{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;line-height:1.1}
 .map-big .lbl{font-size:13px;font-weight:700;color:var(--accent)}
@@ -1230,12 +1230,11 @@ function legLine(l, o) {
   return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${STATIONS[tr.stops.at(-1).s]}行${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
 }
 function renderMapResult(o) {
-  const { a, b, dir } = mapState;
-  const dirName = dir === "down" ? "下り" : "上り";
+  const { a, b } = mapState;
   const sel = $("mapSel"), res = $("mapResult");
   if (a == null) { sel.innerHTML = '出発駅を<span class="muted">路線図でタップ</span>'; res.innerHTML = ""; return; }
   if (b == null) { sel.innerHTML = `${STATIONS[a]} → <span class="muted">到着駅をタップ</span>`; res.innerHTML = ""; return; }
-  sel.innerHTML = `${STATIONS[a]} → ${STATIONS[b]} <span class="muted">（${dirName}の最終）</span>`;
+  sel.textContent = `${STATIONS[a]} → ${STATIONS[b]}`; // 上り／下りはボタンで分かるので書かない
   const j = lastJourney(NETS[state.dayType], a, b, o);
   const toSearch = '<div class="map-actions"><button type="button" class="now last" id="mapToSearch">検索画面で見る</button></div>';
   if (!j) { res.innerHTML = '<p class="map-hint">この区間に乗れる列車がありません。</p>'; return; }

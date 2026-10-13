@@ -194,12 +194,11 @@ function legLine(l, o) {
   return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${STATIONS[tr.stops.at(-1).s]}行${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
 }
 function renderMapResult(o) {
-  const { a, b, dir } = mapState;
-  const dirName = dir === "down" ? "下り" : "上り";
+  const { a, b } = mapState;
   const sel = $("mapSel"), res = $("mapResult");
   if (a == null) { sel.innerHTML = '出発駅を<span class="muted">路線図でタップ</span>'; res.innerHTML = ""; return; }
   if (b == null) { sel.innerHTML = `${STATIONS[a]} → <span class="muted">到着駅をタップ</span>`; res.innerHTML = ""; return; }
-  sel.innerHTML = `${STATIONS[a]} → ${STATIONS[b]} <span class="muted">（${dirName}の最終）</span>`;
+  sel.textContent = `${STATIONS[a]} → ${STATIONS[b]}`; // 上り／下りはボタンで分かるので書かない
   const j = lastJourney(NETS[state.dayType], a, b, o);
   const toSearch = '<div class="map-actions"><button type="button" class="now last" id="mapToSearch">検索画面で見る</button></div>';
   if (!j) { res.innerHTML = '<p class="map-hint">この区間に乗れる列車がありません。</p>'; return; }

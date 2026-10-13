@@ -124,7 +124,7 @@ footer p{margin:0}
 .map-detail > div{display:flex;flex-direction:column;gap:8px;padding-bottom:4px}
 .map-chip{font-size:11px;font-weight:700;color:var(--bus);margin-left:6px}
 .map-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.map-sel{margin:0;font-weight:700;flex:1 1 140px;min-width:0}
+.map-sel{margin:0;font-weight:700;flex:1 1 140px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .map-sel .muted{color:var(--muted);font-weight:400}
 .map-big{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;line-height:1.1}
 .map-big .lbl{font-size:13px;font-weight:700;color:var(--accent)}
