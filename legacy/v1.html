@@ -1,0 +1,363 @@
+<title>内房線 乗換検索</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one narrow column like a station timetable card — search form on top, result cards below */
+:root{
+  --bg:#f3f6f8; --surface:#ffffff; --fg:#14232c; --muted:#5d6f7a; --line:#d5dee4;
+  --accent:#0098d1; --accent-ink:#ffffff; --accent-soft:#e2f3fa;
+  --bus:#d27a12; --bus-soft:#fcefdc; --warn:#c2361f; --warn-soft:#fbe6e2;
+  --f-text:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --f-time:"Barlow Condensed","BIZ UDPGothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
+  --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
+  --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
+  --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
+  --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-text);font-size:15px;line-height:1.55}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:center;gap:10px}
+.badge{background:var(--accent);color:var(--accent-ink);font-family:var(--f-time);font-weight:700;font-size:15px;padding:2px 8px;border-radius:4px;letter-spacing:.04em}
+h1{font-size:20px;margin:0;text-wrap:balance}
+form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.stations{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);letter-spacing:.04em;min-width:0}
+select,input[type=time]{font:inherit;font-size:17px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 8px;width:100%;min-width:0}
+select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.swap{font:inherit;font-size:18px;background:var(--accent-soft);color:var(--accent);border:0;border-radius:8px;width:44px;height:46px;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:15px;border:0;background:var(--bg);color:var(--muted);padding:10px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.row label.time{flex:1 1 120px}
+.row label.margin{flex:0 0 auto}
+.row label.margin select{width:auto}
+.now{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:10px 12px;cursor:pointer}
+.summary{font-size:13px;color:var(--muted);margin:0}
+#results{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card.best{border-color:var(--accent)}
+.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.t{font-family:var(--f-time);font-weight:700;font-size:32px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.arrow{color:var(--muted);font-size:18px}
+.dur{margin-left:auto;font-size:14px;color:var(--muted);text-align:right}
+.dur b{font-family:var(--f-time);font-size:22px;color:var(--fg);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--fg)}
+.chip.warn{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.chip.tag{background:var(--accent);color:var(--accent-ink);font-weight:700}
+details summary{cursor:pointer;font-size:13px;color:var(--accent);list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";}
+details[open] summary::before{content:"▾ ";}
+ol.legs{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column}
+.stop{display:grid;grid-template-columns:52px 14px 1fr;gap:8px;align-items:center}
+.stop .tm{font-family:var(--f-time);font-weight:600;font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
+.dot{width:12px;height:12px;border-radius:50%;border:3px solid var(--accent);background:var(--surface);justify-self:center}
+.stop .nm{font-weight:700}
+.seg-line{display:grid;grid-template-columns:52px 14px 1fr;gap:8px;min-height:34px}
+.seg-line .bar{width:4px;justify-self:center;background:var(--accent);border-radius:2px}
+.seg-line.bus .bar{background:repeating-linear-gradient(var(--bus) 0 6px,transparent 6px 10px)}
+.seg-line .info{font-size:13px;color:var(--muted);align-self:center;padding-block:4px}
+.seg-line.bus .info{color:var(--bus)}
+.wait{display:grid;grid-template-columns:52px 14px 1fr;gap:8px;font-size:12px;color:var(--muted);min-height:22px;align-items:center}
+.wait .bar{width:0;height:100%;border-left:2px dotted var(--line);justify-self:center}
+.wait.tight{color:var(--warn);font-weight:700}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:20px;text-align:center;color:var(--muted)}
+footer{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+footer p{margin:0}
+@media (max-width:380px){.t{font-size:28px}}
+</style>
+
+<div class="wrap">
+  <header><span class="badge">JO 内房線</span><h1>千葉〜君津 乗換検索</h1></header>
+
+  <form id="f">
+    <div class="stations">
+      <label for="from">出発駅<select id="from"></select></label>
+      <button type="button" class="swap" id="swap" aria-label="出発駅と到着駅を入れ替え">⇄</button>
+      <label for="to">到着駅<select id="to"></select></label>
+    </div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="検索方法">
+        <button type="button" id="mDep" aria-pressed="true">出発</button>
+        <button type="button" id="mArr" aria-pressed="false">到着</button>
+      </div>
+      <label class="time" for="time">時刻<input type="time" id="time" value="09:00"></label>
+      <button type="button" class="now" id="now">現在時刻</button>
+      <label class="margin" for="margin">乗換余裕<select id="margin">
+        <option value="1">1分</option><option value="2" selected>2分</option><option value="3">3分</option><option value="5">5分</option><option value="8">8分</option>
+      </select></label>
+    </div>
+  </form>
+
+  <p class="summary" id="summary"></p>
+  <div id="results"></div>
+
+  <footer>
+    <p>時刻表：JR東日本千葉事業本部 臨時ダイヤ（千葉〜姉ヶ崎 9/24現在、長浦〜君津 10/3現在）。</p>
+    <p>長浦〜姉ヶ崎はバスで25分（待ち時間込み）として計算しています。バスの実際の時刻は反映していません。</p>
+    <p>君津着は時刻表に載っていないため、君津発の時刻（停車が長い便は木更津発＋7分）で推定しています。</p>
+    <p>電力設備の影響で、千葉〜姉ヶ崎間は遅れが出ることがあります。乗換が2分以下の便は余裕を見てください。</p>
+  </footer>
+</div>
+
+<script>
+/* ===== DATA ===== */
+const ST=["千葉","本千葉","蘇我","浜野","八幡宿","五井","姉ヶ崎","長浦","袖ケ浦","巌根","木更津","君津"];
+const NAGAURA=7, ANEGASAKI=6, BUS_MIN=25;
+const L_NAI="内房線", L_BUS="バス";
+
+// rows: 千葉,本千葉,蘇我着,蘇我発,浜野,八幡宿,五井,姉ヶ崎
+const DOWN_CA=[
+`5:47 6:00 6:18 6:33 7:01 7:15 7:27 7:50 8:06 8:25 8:44 9:05 9:23 9:39
+5:49 6:03 6:21 6:35 7:03 7:18 7:30 7:53 8:09 8:27 8:47 9:08 9:26 9:42
+5:52 6:06 6:24 6:38 7:06 7:21 7:33 7:56 8:12 8:30 8:50 9:11 9:29 9:45
+5:53 6:10 6:25 6:39 7:09 7:24 7:35 7:57 8:16 8:31 8:51 9:14 9:31 9:47
+5:56 6:14 6:29 6:42 7:13 7:28 7:39 8:01 8:20 8:35 8:54 9:17 9:35 9:50
+5:59 6:17 6:32 6:45 7:16 7:31 7:42 8:04 8:23 8:38 8:57 9:20 9:38 9:53
+6:03 6:21 6:36 6:49 7:19 7:35 7:46 8:08 8:27 8:42 9:01 9:24 9:42 9:57
+6:08 6:26 6:41 6:54 7:24 7:40 7:51 8:12 8:31 8:47 9:06 9:29 9:47 10:02`,
+`10:04 10:20 10:40 11:20 11:40 12:20 13:00 13:20 13:40 14:19 14:53 15:10 15:31 16:16
+10:07 10:23 10:43 11:24 11:43 12:22 13:03 13:22 13:43 14:22 14:56 15:13 15:34 16:19
+10:10 10:26 10:46 11:27 11:46 12:25 13:05 13:25 13:46 14:25 14:59 15:15 15:37 16:22
+10:13 10:30 10:51 11:28 11:51 12:26 13:06 13:26 13:51 14:26 15:00 15:20 15:38 16:22
+10:17 10:34 10:55 11:32 11:54 12:30 13:10 13:30 13:54 14:30 15:04 15:24 15:42 16:26
+10:20 10:37 10:58 11:35 11:57 12:32 13:13 13:33 13:57 14:33 15:06 15:27 15:44 16:29
+10:23 10:41 11:02 11:39 12:01 12:36 13:16 13:37 14:01 14:37 15:10 15:31 15:48 16:32
+10:28 10:46 11:06 11:44 12:06 12:41 13:21 13:41 14:06 14:41 15:15 15:35 15:53 16:37`,
+`16:29 16:59 17:15 17:26 17:43 18:01 18:11 18:28 18:45 19:03 19:17 19:29 20:05 20:15
+16:32 17:02 17:17 17:29 17:46 18:05 18:14 18:31 18:48 19:05 19:19 19:32 20:08 20:18
+16:35 17:05 17:20 17:32 17:49 18:08 18:17 18:33 18:51 19:08 19:23 19:35 20:10 20:21
+16:35 17:05 17:22 17:36 17:51 18:08 18:18 18:36 18:54 19:13 19:27 19:39 20:13 20:25
+16:39 17:09 17:25 17:40 17:55 18:12 18:22 18:40 18:58 19:17 19:30 19:43 20:17 20:29
+16:42 17:12 17:28 17:43 17:57 18:15 18:25 18:43 19:01 19:20 19:33 19:46 20:20 20:33
+16:46 17:16 17:32 17:47 18:01 18:19 18:28 18:47 19:05 19:24 19:37 19:50 20:24 20:37
+16:50 17:21 17:37 17:52 18:06 18:24 18:33 18:52 19:10 19:28 19:42 19:54 20:28 20:42`,
+`20:29 21:04 21:37 22:04 22:12 22:33 23:25 23:50 0:10
+20:32 21:07 21:39 22:07 22:14 22:35 23:27 23:52 0:12
+20:35 21:10 21:42 22:10 22:17 22:38 23:30 23:55 0:15
+20:39 21:11 21:44 22:11 22:21 22:42 23:34 23:57 0:16
+20:43 21:14 21:48 22:14 22:25 22:46 23:37 0:01 0:20
+20:46 21:17 21:51 22:17 22:28 22:48 23:40 0:04 0:23
+20:50 21:21 21:55 22:21 22:32 22:52 23:44 0:07 0:27
+20:54 21:26 21:59 22:26 22:37 22:57 23:49 0:12 0:31`];
+
+// rows: 姉ヶ崎,五井,八幡宿,浜野,蘇我着,蘇我発,本千葉,千葉
+const UP_AC=[
+`5:16 6:25 6:44 6:57 7:09 7:33 7:47 8:01 8:30 8:44 9:01 9:20 9:44 9:56
+5:22 6:30 6:50 7:03 7:14 7:38 7:52 8:06 8:35 8:49 9:06 9:26 9:50 10:01
+5:25 6:34 6:54 7:07 7:18 7:42 7:56 8:10 8:39 8:53 9:10 9:30 9:54 10:05
+5:28 6:37 6:57 7:10 7:21 7:44 7:59 8:13 8:42 8:55 9:13 9:33 9:57 10:08
+5:32 6:40 7:01 7:14 7:24 7:48 8:03 8:16 8:46 8:59 9:17 9:36 10:01 10:11
+5:32 6:43 7:03 7:16 7:29 7:52 8:03 8:18 8:48 9:05 9:20 9:37 10:02 10:13
+5:36 6:46 7:06 7:19 7:32 7:56 8:07 8:21 8:52 9:08 9:23 9:40 10:06 10:17
+5:38 6:49 7:09 7:22 7:35 7:58 8:10 8:24 8:54 9:10 9:26 9:42 10:08 10:19`,
+`10:14 10:36 11:12 11:37 11:58 12:36 13:01 13:36 13:59 14:14 14:57 15:31 15:53 16:20
+10:19 10:41 11:18 11:42 12:03 12:41 13:07 13:41 14:05 14:19 15:02 15:36 15:59 16:26
+10:23 10:45 11:22 11:46 12:07 12:45 13:10 13:45 14:08 14:23 15:06 15:40 16:02 16:29
+10:26 10:48 11:25 11:49 12:10 12:47 13:13 13:48 14:11 14:26 15:09 15:43 16:05 16:32
+10:30 10:52 11:29 11:53 12:13 12:51 13:17 13:51 14:15 14:30 15:13 15:47 16:09 16:36
+10:33 11:01 11:33 12:03 12:18 12:52 13:20 13:52 14:20 14:33 15:19 15:50 16:10 16:36
+10:36 11:05 11:36 12:06 12:21 12:55 13:24 13:55 14:24 14:36 15:23 15:54 16:13 16:40
+10:39 11:07 11:39 12:09 12:24 12:57 13:26 13:58 14:26 14:39 15:25 15:56 16:15 16:42`,
+`16:48 16:57 17:33 17:46 17:59 18:17 18:32 18:46 18:57 19:19 19:39 19:48 20:11 20:32
+16:54 17:03 17:39 17:51 18:05 18:23 18:37 18:52 19:02 19:24 19:44 19:54 20:16 20:37
+16:57 17:07 17:43 17:55 18:09 18:26 18:41 18:56 19:06 19:28 19:48 19:58 20:20 20:41
+17:00 17:10 17:46 17:57 18:12 18:29 18:43 18:59 19:09 19:31 19:51 20:01 20:22 20:44
+17:04 17:13 17:50 18:01 18:15 18:33 18:47 19:03 19:12 19:35 19:55 20:05 20:26 20:48
+17:05 17:14 17:52 18:05 18:16 18:33 18:51 19:08 19:14 19:38 19:58 20:05 20:28 20:54
+17:08 17:17 17:55 18:08 18:19 18:37 18:54 19:11 19:17 19:41 20:01 20:08 20:32 20:58
+17:11 17:19 17:57 18:11 18:21 18:39 18:56 19:14 19:20 19:44 20:03 20:11 20:34 21:00`,
+`20:47 21:22 21:38 21:57 22:36 23:04 23:23
+20:52 21:27 21:43 22:02 22:41 23:09 23:28
+20:56 21:31 21:47 22:07 22:45 23:13 23:32
+21:00 21:34 21:50 22:10 22:48 23:16 23:35
+21:04 21:38 21:54 22:14 22:51 23:19 23:39
+21:07 21:46 21:58 22:15 22:52 23:19 23:41
+21:10 21:49 22:02 22:19 22:55 23:22 23:44
+21:12 21:52 22:04 22:21 22:58 23:25 23:46`];
+
+// rows: 長浦,袖ケ浦,巌根,木更津
+const DOWN_NK=[
+`6:28 6:57 7:27 7:56 8:30 8:59 9:28 9:57 10:27 10:56 11:29 11:58 12:28 12:58 13:27
+6:32 7:02 7:31 8:00 8:34 9:03 9:32 10:01 10:31 11:00 11:33 12:02 12:32 13:02 13:31
+6:36 7:05 7:34 8:04 8:37 9:07 9:36 10:05 10:34 11:03 11:36 12:05 12:36 13:05 13:34
+6:40 7:10 7:39 8:08 8:42 9:11 9:40 10:09 10:39 11:08 11:41 12:10 12:40 13:10 13:39`,
+`13:56 14:25 14:55 15:24 15:53 16:25 16:58 17:27 17:56 18:25 18:55 19:24 19:53 20:22 20:56 21:33
+14:00 14:29 14:59 15:28 15:57 16:29 17:02 17:31 18:00 18:29 18:59 19:28 19:57 20:27 21:00 21:37
+14:04 14:33 15:02 15:31 16:01 16:33 17:05 17:35 18:04 18:33 19:02 19:32 20:01 20:30 21:03 21:40
+14:08 14:37 15:07 15:36 16:05 16:37 17:10 17:39 18:08 18:37 19:07 19:35 20:05 20:34 21:08 21:45`];
+
+// rows: 木更津,巌根,袖ケ浦,長浦
+const UP_KN=[
+`5:50 6:19 6:48 7:18 7:53 8:21 8:50 9:19 9:49 10:18 10:51 11:20 11:50 12:20 12:49 13:18 13:47
+5:54 6:23 6:53 7:22 7:57 8:25 8:54 9:24 9:53 10:22 10:55 11:24 11:55 12:24 12:53 13:22 13:52
+5:58 6:27 6:56 7:26 8:01 8:29 8:58 9:27 9:56 10:26 10:58 11:28 11:58 12:27 12:57 13:26 13:55
+6:03 6:32 7:02 7:31 8:06 8:34 9:03 9:32 10:02 10:31 11:04 11:33 12:03 12:33 13:02 13:31 14:00`,
+`14:17 14:46 15:15 15:44 16:20 16:49 17:18 17:47 18:16 18:45 19:15 19:44 20:15 20:48
+14:21 14:50 15:19 15:49 16:24 16:53 17:22 17:51 18:21 18:50 19:19 19:48 20:19 20:52
+14:24 14:54 15:23 15:52 16:27 16:57 17:26 17:55 18:24 18:54 19:23 19:52 20:23 20:55
+14:30 14:59 15:28 15:57 16:33 17:02 17:31 18:00 18:30 18:59 19:28 19:57 20:28 21:01`];
+
+// 木更津発 → 君津発（君津着の推定に使用）
+const DOWN_KK="5:07-5:15 6:47-6:54 7:41-7:50 8:30-8:37 9:31-9:39 11:17-11:37 13:19-13:37 15:01-15:07 15:17-15:44 16:42-16:49 17:45-17:53 18:40-18:47 19:23-19:45 20:36-20:44 21:13-21:19 21:50-21:58 23:14-23:21";
+// 君津発 → 木更津着
+const UP_KK="5:41-5:47 6:52-7:00 7:44-7:51 8:07-8:13 9:03-9:10 9:24-9:31 11:00-11:08 11:56-12:03 12:56-13:04 15:02-15:10 16:09-16:15 16:39-16:47 19:00-19:08 19:50-19:58 20:53-21:01 21:55-22:03 22:59-23:05";
+
+/* ===== BUILD CONNECTIONS ===== */
+function tm(s){const [h,m]=s.split(":").map(Number);return (h<4?h+24:h)*60+m;}
+function fmt(x){const h=Math.floor(x/60)%24, m=x%60;return h+":"+String(m).padStart(2,"0");}
+const conns=[]; let tripId=0;
+function addTrip(stops){ // stops: [{s,arr,dep}]
+  const id=tripId++;
+  for(let i=0;i<stops.length-1;i++){
+    conns.push({from:stops[i].s,to:stops[i+1].s,dep:stops[i].dep,arr:stops[i+1].arr,trip:id});
+  }
+}
+function blocks(list,stationsWithSoga){ // returns columns as arrays of row values
+  const out=[];
+  for(const b of list){
+    const rows=b.trim().split("\n").map(r=>r.trim().split(/\s+/).map(tm));
+    for(let c=0;c<rows[0].length;c++) out.push(rows.map(r=>r[c]));
+  }
+  return out;
+}
+// 千葉→姉ヶ崎
+for(const c of blocks(DOWN_CA)){
+  const [chb,hon,sa,sd,ham,yaw,goi,ane]=c;
+  addTrip([{s:0,dep:chb},{s:1,arr:hon,dep:hon},{s:2,arr:sa,dep:sd},{s:3,arr:ham,dep:ham},{s:4,arr:yaw,dep:yaw},{s:5,arr:goi,dep:goi},{s:6,arr:ane}]);
+}
+// 姉ヶ崎→千葉
+for(const c of blocks(UP_AC)){
+  const [ane,goi,yaw,ham,sa,sd,hon,chb]=c;
+  addTrip([{s:6,dep:ane},{s:5,arr:goi,dep:goi},{s:4,arr:yaw,dep:yaw},{s:3,arr:ham,dep:ham},{s:2,arr:sa,dep:sd},{s:1,arr:hon,dep:hon},{s:0,arr:chb}]);
+}
+for(const c of blocks(DOWN_NK)){const [n,s,g,k]=c;addTrip([{s:7,dep:n},{s:8,arr:s,dep:s},{s:9,arr:g,dep:g},{s:10,arr:k}]);}
+for(const c of blocks(UP_KN)){const [k,g,s,n]=c;addTrip([{s:10,dep:k},{s:9,arr:g,dep:g},{s:8,arr:s,dep:s},{s:7,arr:n}]);}
+for(const p of DOWN_KK.split(" ")){const [a,b]=p.split("-").map(tm);const est=Math.min(b,a+7);addTrip([{s:10,dep:a},{s:11,arr:est}]);}
+for(const p of UP_KK.split(" ")){const [a,b]=p.split("-").map(tm);addTrip([{s:11,dep:a},{s:10,arr:b}]);}
+conns.sort((a,b)=>a.dep-b.dep||a.arr-b.arr);
+
+/* ===== SEARCH (connection scan) ===== */
+function earliest(origin,dest,t,margin){
+  const INF=1e9, arr=Array(ST.length).fill(INF), board=Array(ST.length).fill(INF), ptr=Array(ST.length).fill(null);
+  const tripIn=new Map();
+  arr[origin]=t; board[origin]=t;
+  const relaxBus=(s,time)=>{
+    const o=s===NAGAURA?ANEGASAKI:s===ANEGASAKI?NAGAURA:-1;
+    if(o<0) return;
+    const a=time+BUS_MIN;
+    if(a<arr[o]){arr[o]=a;board[o]=a+margin;ptr[o]={bus:true,from:s,dep:time,arr:a};}
+  };
+  relaxBus(origin,t);
+  for(const c of conns){
+    if(c.dep<t) continue;
+    if(arr[dest]<=c.dep) break;
+    const onTrip=tripIn.has(c.trip);
+    if(!onTrip && board[c.from]>c.dep) continue;
+    if(!onTrip) tripIn.set(c.trip,c);
+    if(c.arr<arr[c.to]){
+      arr[c.to]=c.arr; board[c.to]=c.arr+margin;
+      ptr[c.to]={bus:false,enter:tripIn.get(c.trip),exit:c};
+      relaxBus(c.to,c.arr);
+    }
+  }
+  if(arr[dest]>=INF) return null;
+  const legs=[]; let s=dest, guard=0;
+  while(s!==origin && guard++<20){
+    const p=ptr[s];
+    if(p.bus){legs.unshift({type:"bus",from:p.from,to:s,dep:p.dep,arr:p.arr});s=p.from;}
+    else{legs.unshift({type:"train",from:p.enter.from,to:s,dep:p.enter.dep,arr:p.exit.arr});s=p.enter.from;}
+  }
+  return {dep:legs[0].dep,arr:arr[dest],legs};
+}
+function journeys(origin,dest,mode,time,margin){
+  const map=new Map();
+  const span=7*60;
+  const lo=mode==="dep"?time:time-span, hi=mode==="dep"?time+span:time;
+  for(let t=lo;t<=hi;t++){
+    const j=earliest(origin,dest,t,margin);
+    if(!j) continue;
+    if(mode==="arr" && j.arr>time) continue;
+    const prev=map.get(j.arr);
+    if(!prev||j.dep>prev.dep) map.set(j.arr,j);
+  }
+  // drop journeys dominated (leave earlier and arrive later is fine; leave earlier & arrive same/later than one leaving later = dominated)
+  let list=[...map.values()].sort((a,b)=>a.dep-b.dep);
+  list=list.filter(j=>!list.some(k=>k!==j&&k.dep>=j.dep&&k.arr<=j.arr));
+  if(list.length&&list.every(j=>j.legs.every(l=>l.type==="bus"))) return mode==="dep"?list.slice(0,1):list.slice(-1);
+  if(mode==="dep") return list.slice(0,6);
+  return list.reverse().slice(0,6);
+}
+
+/* ===== UI ===== */
+const $=id=>document.getElementById(id);
+const fromSel=$("from"), toSel=$("to");
+ST.forEach((n,i)=>{fromSel.add(new Option(n,i));toSel.add(new Option(n,i));});
+let mode="dep";
+function load(){try{return JSON.parse(localStorage.getItem("uchibo-search")||"{}");}catch(e){return {};}}
+function save(){try{localStorage.setItem("uchibo-search",JSON.stringify({from:fromSel.value,to:toSel.value,mode,margin:$("margin").value}));}catch(e){}}
+const saved=load();
+fromSel.value=saved.from??"11"; toSel.value=saved.to??"0";
+if(saved.margin) $("margin").value=saved.margin;
+if(saved.mode) mode=saved.mode;
+function nowStr(){const d=new Date();return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");}
+$("time").value=nowStr();
+function setMode(m){mode=m;$("mDep").setAttribute("aria-pressed",m==="dep");$("mArr").setAttribute("aria-pressed",m==="arr");run();}
+$("mDep").onclick=()=>setMode("dep");
+$("mArr").onclick=()=>setMode("arr");
+$("swap").onclick=()=>{const a=fromSel.value;fromSel.value=toSel.value;toSel.value=a;run();};
+$("now").onclick=()=>{$("time").value=nowStr();run();};
+[fromSel,toSel,$("time"),$("margin")].forEach(el=>el.addEventListener("change",run));
+$("f").addEventListener("submit",e=>{e.preventDefault();run();});
+
+function durStr(m){const h=Math.floor(m/60),mm=m%60;return h?`${h}時間${mm}分`:`${mm}分`;}
+function esc(s){return String(s);}
+function render(j,i){
+  const transfers=j.legs.filter(l=>l.type==="train").length-1;
+  const hasBus=j.legs.some(l=>l.type==="bus");
+  let tight=false;
+  let html="";
+  j.legs.forEach((l,k)=>{
+    if(k===0) html+=`<li class="stop"><span class="tm">${fmt(l.dep)}</span><span class="dot"></span><span class="nm">${ST[l.from]} 発</span></li>`;
+    else{
+      const w=l.dep-j.legs[k-1].arr;
+      const t=w<=2; if(t) tight=true;
+      html+=`<li class="stop"><span class="tm">${fmt(l.dep)}</span><span class="dot"></span><span class="nm">${ST[l.from]} 発</span></li>`;
+    }
+    const isBus=l.type==="bus";
+    html+=`<li class="seg-line${isBus?" bus":""}"><span></span><span class="bar"></span><span class="info">${isBus?"バス（25分想定）":L_NAI+"　"+(l.arr-l.dep)+"分"}</span></li>`;
+    html+=`<li class="stop"><span class="tm">${fmt(l.arr)}</span><span class="dot"></span><span class="nm">${ST[l.to]} 着${l.to===11&&!isBus?"（推定）":""}</span></li>`;
+    if(k<j.legs.length-1){
+      const w=j.legs[k+1].dep-l.arr;
+      html+=`<li class="wait${w<=2?" tight":""}"><span></span><span class="bar"></span><span>乗換 ${w}分${w<=2?"・ギリギリ":""}</span></li>`;
+    }
+  });
+  const label = mode==="arr"&&i===0?'<span class="chip tag">最終</span>':mode==="dep"&&i===0?'<span class="chip tag">先発</span>':"";
+  return `<article class="card${i===0?" best":""}">
+    <div class="top"><span class="t">${fmt(j.dep)}</span><span class="arrow">→</span><span class="t">${fmt(j.arr)}</span>
+      <span class="dur"><b>${durStr(j.arr-j.dep)}</b></span></div>
+    <div class="chips">${label}<span class="chip">乗換${Math.max(0,transfers)+(hasBus?1:0)}回</span>${hasBus?'<span class="chip">バス利用</span>':""}${tight?'<span class="chip warn">乗換2分以下あり</span>':""}</div>
+    <details${i===0?" open":""}><summary>経路を見る</summary><ol class="legs">${html}</ol></details>
+  </article>`;
+}
+function run(){
+  save();
+  const o=+fromSel.value, d=+toSel.value, margin=+$("margin").value;
+  const tv=$("time").value||"09:00";
+  const [h,m]=tv.split(":").map(Number);
+  const time=(h<4?h+24:h)*60+m;
+  const res=$("results");
+  if(o===d){res.innerHTML='<div class="empty">出発駅と到着駅が同じです。別の駅を選んでください。</div>';$("summary").textContent="";return;}
+  const list=journeys(o,d,mode,time,margin);
+  $("summary").textContent=`${ST[o]} → ${ST[d]}　${fmt(time)} ${mode==="dep"?"以降に出発":"までに到着"}　（乗換余裕${margin}分）`;
+  if(!list.length){res.innerHTML=`<div class="empty">${mode==="dep"?"この時刻以降に乗れる列車がありません。":"この時刻までに着ける列車がありません。"}時刻を変えてみてください。</div>`;return;}
+  res.innerHTML=list.map(render).join("");
+}
+setMode(mode);
+</script>
