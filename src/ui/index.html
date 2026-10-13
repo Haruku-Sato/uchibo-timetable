@@ -1,0 +1,69 @@
+<title>内房線 臨時ダイヤ 乗換検索</title>
+<style>/*STYLE*/</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+
+<div class="wrap">
+  <header><span class="badge">JO 内房線</span><h1>臨時ダイヤ 乗換検索</h1></header>
+
+  <form id="f">
+    <div class="stations">
+      <label for="from">出発駅<select id="from"></select></label>
+      <button type="button" class="swap" id="swap" aria-label="出発駅と到着駅を入れ替え">⇄</button>
+      <label for="to">到着駅<select id="to"></select></label>
+    </div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="検索方法">
+        <button type="button" id="mDep" aria-pressed="true">出発</button>
+        <button type="button" id="mArr" aria-pressed="false">到着</button>
+      </div>
+      <label class="time" for="time">時刻<input type="time" id="time" value="09:00"></label>
+      <button type="button" class="now" id="now">現在時刻</button>
+    </div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="曜日">
+        <button type="button" id="dWk" aria-pressed="true">平日</button>
+        <button type="button" id="dHol" aria-pressed="false">土休日</button>
+      </div>
+      <button type="button" class="now last" id="last">この区間の最終</button>
+    </div>
+
+    <details class="settings" id="settings">
+      <summary>設定 <span id="setSummary"></span></summary>
+      <div class="set-grid">
+        <label for="margin">乗換余裕<select id="margin">
+          <option value="1">1分</option><option value="2" selected>2分</option><option value="3">3分</option><option value="5">5分</option><option value="8">8分</option>
+        </select></label>
+        <div class="field">
+          <span class="lab" id="busMinLab">バス所要（姉ヶ崎〜長浦）</span>
+          <div class="stepper" role="group" aria-labelledby="busMinLab">
+            <button type="button" id="busDec" aria-label="1分短く">−</button>
+            <input type="number" id="busMin" min="1" max="120" step="1" value="25" inputmode="numeric" aria-labelledby="busMinLab">
+            <span class="unit">分</span>
+            <button type="button" id="busInc" aria-label="1分長く">＋</button>
+          </div>
+        </div>
+        <div class="field wide">
+          <span class="lab">バスの運行時間（空欄＝指定なし）</span>
+          <div class="bus-hours">
+            <label for="busFirst">始発<input type="time" id="busFirst"></label>
+            <span class="tilde">〜</span>
+            <label for="busLast">最終<input type="time" id="busLast"></label>
+            <button type="button" class="now" id="busClear">指定なし</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  </form>
+
+  <p class="summary" id="summary" aria-live="polite"></p>
+  <div id="results"></div>
+
+  <footer>
+    <p>時刻表：JR東日本千葉事業本部 臨時ダイヤ（千葉〜姉ヶ崎 9/25〜、長浦〜安房鴨川 10/5〜）。長浦〜木更津と木更津〜安房鴨川は全列車が木更津で乗り換えです。</p>
+    <p>姉ヶ崎〜長浦は列車がなくバス代行です。バスは設定の所要時間（待ち時間込み）で、運行時間内なら随時乗れるものとして計算しています。実際のバスの時刻は反映していません。</p>
+    <p>時刻表に「着」がない駅は、長く停車する場合だけ到着時刻を推定しています（「頃」と表示）。推定した到着からの乗換は、実際にはもっと短いかもしれません。</p>
+    <p>電力設備の影響で遅れが出ることがあります。乗換が2分以下の便は余裕を見てください。</p>
+  </footer>
+</div>
+
+<script>/*SCRIPT*/</script>

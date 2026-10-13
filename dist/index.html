@@ -1,0 +1,978 @@
+<title>内房線 臨時ダイヤ 乗換検索</title>
+<style>
+/* Layout: one narrow column like a station timetable card — search form on top, result cards below */
+:root{
+  --bg:#f3f6f8; --surface:#ffffff; --fg:#14232c; --muted:#5d6f7a; --line:#d5dee4;
+  --accent:#0098d1; --accent-ink:#ffffff; --accent-soft:#e2f3fa;
+  --bus:#b86808; --bus-soft:#fcefdc; --warn:#c2361f; --warn-soft:#fbe6e2;
+  --est:#6b5bb5; --est-soft:#ece9f8; --ok:#1f7a4d; --ok-soft:#e0f3e8;
+  --f-text:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --f-time:"Barlow Condensed","BIZ UDPGothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
+  --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
+  --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
+  --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
+  --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
+  --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
+  --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-text);font-size:15px;line-height:1.55}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:center;gap:10px}
+.badge{background:var(--accent);color:var(--accent-ink);font-family:var(--f-time);font-weight:700;font-size:15px;padding:2px 8px;border-radius:4px;letter-spacing:.04em;flex:none}
+h1{font-size:20px;margin:0;text-wrap:balance}
+form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.stations{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+label,.lab{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);letter-spacing:.04em;min-width:0}
+select,input[type=time],input[type=number]{font:inherit;font-size:17px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 8px;width:100%;min-width:0;min-height:46px}
+select:focus-visible,input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;cursor:pointer;min-height:44px}
+.swap{font-size:18px;background:var(--accent-soft);color:var(--accent);border:0;border-radius:8px;width:44px;height:46px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
+.seg button{font-size:15px;border:0;background:var(--bg);color:var(--muted);padding:10px 14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.row label.time{flex:1 1 110px}
+.now{font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:10px 12px}
+.now.last{margin-left:auto;border-color:var(--accent);color:var(--accent);font-weight:700}
+.settings{border-top:1px solid var(--line);padding-top:10px}
+.settings summary{cursor:pointer;font-size:14px;color:var(--accent);list-style:none;min-height:44px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.settings summary::-webkit-details-marker{display:none}
+.settings summary::before{content:"▸";}
+.settings[open] summary::before{content:"▾";}
+#setSummary{color:var(--muted);font-size:12px}
+.set-grid{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:end;padding-top:6px}
+.set-grid .wide{grid-column:1/-1}
+.set-grid label select{width:auto}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:44px;height:46px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;font-size:20px;flex:none}
+.stepper input{width:4.2em;text-align:center;flex:none}
+.unit{font-size:14px;color:var(--muted)}
+.bus-hours{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.bus-hours label{flex:1 1 100px}
+.tilde{padding-bottom:12px;color:var(--muted)}
+.summary{font-size:13px;color:var(--muted);margin:0}
+#results{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card.best{border-color:var(--accent)}
+.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.t{font-family:var(--f-time);font-weight:700;font-size:32px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.t small{font-family:var(--f-text);font-size:13px;font-weight:700;margin-left:2px}
+.t small.by{color:var(--bus)}
+.arrow{color:var(--muted);font-size:18px}
+.dur{margin-left:auto;font-size:14px;color:var(--muted);text-align:right}
+.dur b{font-family:var(--f-time);font-size:22px;color:var(--fg);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--fg)}
+.chip.warn{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.chip.tag{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.chip.est{background:var(--est-soft);color:var(--est);font-weight:700}
+.chip.bus{background:var(--bus-soft);color:var(--bus);font-weight:700}
+.chip.ok{background:var(--ok-soft);color:var(--ok);font-weight:700}
+.note{font-size:13px;margin:0;padding:8px 10px;border-radius:8px;background:var(--bus-soft);color:var(--bus)}
+details.route summary{cursor:pointer;font-size:13px;color:var(--accent);list-style:none;min-height:32px;display:flex;align-items:center}
+details.route summary::-webkit-details-marker{display:none}
+details.route summary::before{content:"▸ ";white-space:pre}
+details.route[open] summary::before{content:"▾ ";}
+ol.legs{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column}
+.stop,.seg-line,.wait{display:grid;grid-template-columns:58px 14px 1fr;gap:8px}
+.stop{align-items:center}
+.stop .tm{font-family:var(--f-time);font-weight:600;font-size:18px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.stop .tm small{font-family:var(--f-text);font-size:11px;color:var(--est);font-weight:700}
+.dot{width:12px;height:12px;border-radius:50%;border:3px solid var(--accent);background:var(--surface);justify-self:center}
+.stop.bus .dot{border-color:var(--bus)}
+.stop .nm{font-weight:700;min-width:0}
+.stop .nm em{font-style:normal;font-weight:400;font-size:12px;color:var(--bus)}
+.seg-line{min-height:34px}
+.seg-line .bar{width:4px;justify-self:center;background:var(--accent);border-radius:2px}
+.seg-line.bus .bar{background:repeating-linear-gradient(var(--bus) 0 6px,transparent 6px 10px)}
+.seg-line .info{font-size:13px;color:var(--muted);align-self:center;padding-block:4px}
+.seg-line.bus .info{color:var(--bus)}
+.wait{font-size:12px;color:var(--muted);min-height:22px;align-items:center}
+.wait .bar{width:0;height:100%;border-left:2px dotted var(--line);justify-self:center}
+.wait.tight{color:var(--warn);font-weight:700}
+.wait.est{color:var(--est)}
+.wait.linked{color:var(--ok);font-weight:700}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:20px;text-align:center;color:var(--muted)}
+footer{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+footer p{margin:0}
+@media (max-width:400px){
+  .t{font-size:28px}
+  .now.last{margin-left:0;flex:1 1 auto}
+  .set-grid{grid-template-columns:1fr}
+}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+
+<div class="wrap">
+  <header><span class="badge">JO 内房線</span><h1>臨時ダイヤ 乗換検索</h1></header>
+
+  <form id="f">
+    <div class="stations">
+      <label for="from">出発駅<select id="from"></select></label>
+      <button type="button" class="swap" id="swap" aria-label="出発駅と到着駅を入れ替え">⇄</button>
+      <label for="to">到着駅<select id="to"></select></label>
+    </div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="検索方法">
+        <button type="button" id="mDep" aria-pressed="true">出発</button>
+        <button type="button" id="mArr" aria-pressed="false">到着</button>
+      </div>
+      <label class="time" for="time">時刻<input type="time" id="time" value="09:00"></label>
+      <button type="button" class="now" id="now">現在時刻</button>
+    </div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="曜日">
+        <button type="button" id="dWk" aria-pressed="true">平日</button>
+        <button type="button" id="dHol" aria-pressed="false">土休日</button>
+      </div>
+      <button type="button" class="now last" id="last">この区間の最終</button>
+    </div>
+
+    <details class="settings" id="settings">
+      <summary>設定 <span id="setSummary"></span></summary>
+      <div class="set-grid">
+        <label for="margin">乗換余裕<select id="margin">
+          <option value="1">1分</option><option value="2" selected>2分</option><option value="3">3分</option><option value="5">5分</option><option value="8">8分</option>
+        </select></label>
+        <div class="field">
+          <span class="lab" id="busMinLab">バス所要（姉ヶ崎〜長浦）</span>
+          <div class="stepper" role="group" aria-labelledby="busMinLab">
+            <button type="button" id="busDec" aria-label="1分短く">−</button>
+            <input type="number" id="busMin" min="1" max="120" step="1" value="25" inputmode="numeric" aria-labelledby="busMinLab">
+            <span class="unit">分</span>
+            <button type="button" id="busInc" aria-label="1分長く">＋</button>
+          </div>
+        </div>
+        <div class="field wide">
+          <span class="lab">バスの運行時間（空欄＝指定なし）</span>
+          <div class="bus-hours">
+            <label for="busFirst">始発<input type="time" id="busFirst"></label>
+            <span class="tilde">〜</span>
+            <label for="busLast">最終<input type="time" id="busLast"></label>
+            <button type="button" class="now" id="busClear">指定なし</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  </form>
+
+  <p class="summary" id="summary" aria-live="polite"></p>
+  <div id="results"></div>
+
+  <footer>
+    <p>時刻表：JR東日本千葉事業本部 臨時ダイヤ（千葉〜姉ヶ崎 9/25〜、長浦〜安房鴨川 10/5〜）。長浦〜木更津と木更津〜安房鴨川は全列車が木更津で乗り換えです。</p>
+    <p>姉ヶ崎〜長浦は列車がなくバス代行です。バスは設定の所要時間（待ち時間込み）で、運行時間内なら随時乗れるものとして計算しています。実際のバスの時刻は反映していません。</p>
+    <p>時刻表に「着」がない駅は、長く停車する場合だけ到着時刻を推定しています（「頃」と表示）。推定した到着からの乗換は、実際にはもっと短いかもしれません。</p>
+    <p>電力設備の影響で遅れが出ることがあります。乗換が2分以下の便は余裕を見てください。</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ---- src/data/stations.mjs ---- */
+/* 駅一覧（下り方向の順）。インデックスが大きいほど安房鴨川寄り。 */
+const STATIONS = [
+  "千葉", "本千葉", "蘇我", "浜野", "八幡宿", "五井", "姉ヶ崎",
+  "長浦", "袖ケ浦", "巌根", "木更津", "君津", "青堀", "大貫", "佐貫町", "上総湊",
+  "竹岡", "浜金谷", "保田", "安房勝山", "岩井", "富浦", "那古船形", "館山",
+  "九重", "千倉", "千歳", "南三原", "和田浦", "江見", "太海", "安房鴨川",
+];
+const SI = Object.fromEntries(STATIONS.map((n, i) => [n, i]));
+
+/* 姉ヶ崎〜長浦は列車なし（バス代行） */
+const BUS = { a: SI["姉ヶ崎"], b: SI["長浦"], defaultMin: 25 };
+
+/* ---- src/data/timetable.mjs ---- */
+/* ===== 時刻表データ =====
+ * 1行 = 時刻表の1列（1本の列車の縦の並び）。
+ *   先頭のラベル "段-列" は画像上の位置（何段目の表の、左から何列目か）。空の列は省略。
+ *   その後ろに rows の順でセルを並べる。
+ *     H:MM  … 時刻（0時台は24時以降として扱う）
+ *     .     … 空欄
+ *     =     … 「＝」。列車はここで運転を打ち切る（このセルより下には来ない）。
+ *              同じ列の「＝」より下に時刻があれば、それは別の列車（途中駅始発）として扱う。
+ * rows の末尾の「発」「着」は、その行の時刻が発車か到着かを表す。
+ * 画像の「5;19」などの「;」は「:」として転記した（該当箇所は各表のコメントを参照）。
+ */
+
+const TABLES = [
+  {
+    id: "down-chiba-anegasaki",
+    title: "下り 千葉→姉ヶ崎",
+    dir: "down",
+    source: "docs/timetables/chiba-anegasaki_0925.png（上半分）",
+    rows: ["千葉発", "本千葉発", "蘇我着", "蘇我発", "浜野発", "八幡宿発", "五井発", "姉ヶ崎着"],
+    cols: `
+1-01   5:47  5:49  5:52  5:53  5:56  5:59  6:03  6:08
+1-02   6:00  6:03  6:06  6:10  6:14  6:17  6:21  6:26
+1-03   6:18  6:21  6:24  6:25  6:29  6:32  6:36  6:41
+1-04   6:33  6:35  6:38  6:39  6:42  6:45  6:49  6:54
+1-05   7:01  7:03  7:06  7:09  7:13  7:16  7:19  7:24
+1-06   7:15  7:18  7:21  7:24  7:28  7:31  7:35  7:40
+1-07   7:27  7:30  7:33  7:35  7:39  7:42  7:46  7:51
+1-08   7:50  7:53  7:56  7:57  8:01  8:04  8:08  8:12
+1-09   8:06  8:09  8:12  8:16  8:20  8:23  8:27  8:31
+1-10   8:25  8:27  8:30  8:31  8:35  8:38  8:42  8:47
+1-11   8:44  8:47  8:50  8:51  8:54  8:57  9:01  9:06
+1-12   9:05  9:08  9:11  9:14  9:17  9:20  9:24  9:29
+1-13   9:23  9:26  9:29  9:31  9:35  9:38  9:42  9:47
+1-14   9:39  9:42  9:45  9:47  9:50  9:53  9:57 10:02
+2-01  10:04 10:07 10:10 10:13 10:17 10:20 10:23 10:28
+2-02  10:20 10:23 10:26 10:30 10:34 10:37 10:41 10:46
+2-03  10:40 10:43 10:46 10:51 10:55 10:58 11:02 11:06
+2-04  11:20 11:24 11:27 11:28 11:32 11:35 11:39 11:44
+2-05  11:40 11:43 11:46 11:51 11:54 11:57 12:01 12:06
+2-06  12:20 12:22 12:25 12:26 12:30 12:32 12:36 12:41
+2-07  13:00 13:03 13:05 13:06 13:10 13:13 13:16 13:21
+2-08  13:20 13:22 13:25 13:26 13:30 13:33 13:37 13:41
+2-09  13:40 13:43 13:46 13:51 13:54 13:57 14:01 14:06
+2-10  14:19 14:22 14:25 14:26 14:30 14:33 14:37 14:41
+2-11  14:53 14:56 14:59 15:00 15:04 15:06 15:10 15:15
+2-12  15:10 15:13 15:15 15:20 15:24 15:27 15:31 15:35
+2-13  15:31 15:34 15:37 15:38 15:42 15:44 15:48 15:53
+2-14  16:16 16:19 16:22 16:22 16:26 16:29 16:32 16:37
+3-01  16:29 16:32 16:35 16:35 16:39 16:42 16:46 16:50
+3-02  16:59 17:02 17:05 17:05 17:09 17:12 17:16 17:21
+3-03  17:15 17:17 17:20 17:22 17:25 17:28 17:32 17:37
+3-04  17:26 17:29 17:32 17:36 17:40 17:43 17:47 17:52
+3-05  17:43 17:46 17:49 17:51 17:55 17:57 18:01 18:06
+3-06  18:01 18:05 18:08 18:08 18:12 18:15 18:19 18:24
+3-07  18:11 18:14 18:17 18:18 18:22 18:25 18:28 18:33
+3-08  18:28 18:31 18:33 18:36 18:40 18:43 18:47 18:52
+3-09  18:45 18:48 18:51 18:54 18:58 19:01 19:05 19:10
+3-10  19:03 19:05 19:08 19:13 19:17 19:20 19:24 19:28
+3-11  19:17 19:19 19:23 19:27 19:30 19:33 19:37 19:42
+3-12  19:29 19:32 19:35 19:39 19:43 19:46 19:50 19:54
+3-13  20:05 20:08 20:10 20:13 20:17 20:20 20:24 20:28
+3-14  20:15 20:18 20:21 20:25 20:29 20:33 20:37 20:42
+4-01  20:29 20:32 20:35 20:39 20:43 20:46 20:50 20:54
+4-02  21:04 21:07 21:10 21:11 21:14 21:17 21:21 21:26
+4-03  21:37 21:39 21:42 21:44 21:48 21:51 21:55 21:59
+4-04  22:04 22:07 22:10 22:11 22:14 22:17 22:21 22:26
+4-05  22:12 22:14 22:17 22:21 22:25 22:28 22:32 22:37
+4-06  22:33 22:35 22:38 22:42 22:46 22:48 22:52 22:57
+4-07  23:25 23:27 23:30 23:34 23:37 23:40 23:44 23:49
+4-08  23:50 23:52 23:55 23:57  0:01  0:04  0:07  0:12
+4-09   0:10  0:12  0:15  0:16  0:20  0:23  0:27  0:31
+`,
+  },
+  {
+    id: "up-anegasaki-chiba",
+    title: "上り 姉ヶ崎→千葉",
+    dir: "up",
+    source: "docs/timetables/chiba-anegasaki_0925.png（下半分）",
+    rows: ["姉ヶ崎発", "五井発", "八幡宿発", "浜野発", "蘇我着", "蘇我発", "本千葉発", "千葉着"],
+    cols: `
+1-01   5:16  5:22  5:25  5:28  5:32  5:32  5:36  5:38
+1-02   6:25  6:30  6:34  6:37  6:40  6:43  6:46  6:49
+1-03   6:44  6:50  6:54  6:57  7:01  7:03  7:06  7:09
+1-04   6:57  7:03  7:07  7:10  7:14  7:16  7:19  7:22
+1-05   7:09  7:14  7:18  7:21  7:24  7:29  7:32  7:35
+1-06   7:33  7:38  7:42  7:44  7:48  7:52  7:56  7:58
+1-07   7:47  7:52  7:56  7:59  8:03  8:03  8:07  8:10
+1-08   8:01  8:06  8:10  8:13  8:16  8:18  8:21  8:24
+1-09   8:30  8:35  8:39  8:42  8:46  8:48  8:52  8:54
+1-10   8:44  8:49  8:53  8:55  8:59  9:05  9:08  9:10
+1-11   9:01  9:06  9:10  9:13  9:17  9:20  9:23  9:26
+1-12   9:20  9:26  9:30  9:33  9:36  9:37  9:40  9:42
+1-13   9:44  9:50  9:54  9:57 10:01 10:02 10:06 10:08
+1-14   9:56 10:01 10:05 10:08 10:11 10:13 10:17 10:19
+2-01  10:14 10:19 10:23 10:26 10:30 10:33 10:36 10:39
+2-02  10:36 10:41 10:45 10:48 10:52 11:01 11:05 11:07
+2-03  11:12 11:18 11:22 11:25 11:29 11:33 11:36 11:39
+2-04  11:37 11:42 11:46 11:49 11:53 12:03 12:06 12:09
+2-05  11:58 12:03 12:07 12:10 12:13 12:18 12:21 12:24
+2-06  12:36 12:41 12:45 12:47 12:51 12:52 12:55 12:57
+2-07  13:01 13:07 13:10 13:13 13:17 13:20 13:24 13:26
+2-08  13:36 13:41 13:45 13:48 13:51 13:52 13:55 13:58
+2-09  13:59 14:05 14:08 14:11 14:15 14:20 14:24 14:26
+2-10  14:14 14:19 14:23 14:26 14:30 14:33 14:36 14:39
+2-11  14:57 15:02 15:06 15:09 15:13 15:19 15:23 15:25
+2-12  15:31 15:36 15:40 15:43 15:47 15:50 15:54 15:56
+2-13  15:53 15:59 16:02 16:05 16:09 16:10 16:13 16:15
+2-14  16:20 16:26 16:29 16:32 16:36 16:36 16:40 16:42
+3-01  16:48 16:54 16:57 17:00 17:04 17:05 17:08 17:11
+3-02  16:57 17:03 17:07 17:10 17:13 17:14 17:17 17:19
+3-03  17:33 17:39 17:43 17:46 17:50 17:52 17:55 17:57
+3-04  17:46 17:51 17:55 17:57 18:01 18:05 18:08 18:11
+3-05  17:59 18:05 18:09 18:12 18:15 18:16 18:19 18:21
+3-06  18:17 18:23 18:26 18:29 18:33 18:33 18:37 18:39
+3-07  18:32 18:37 18:41 18:43 18:47 18:51 18:54 18:56
+3-08  18:46 18:52 18:56 18:59 19:03 19:08 19:11 19:14
+3-09  18:57 19:02 19:06 19:09 19:12 19:14 19:17 19:20
+3-10  19:19 19:24 19:28 19:31 19:35 19:38 19:41 19:44
+3-11  19:39 19:44 19:48 19:51 19:55 19:58 20:01 20:03
+3-12  19:48 19:54 19:58 20:01 20:05 20:05 20:08 20:11
+3-13  20:11 20:16 20:20 20:22 20:26 20:28 20:32 20:34
+3-14  20:32 20:37 20:41 20:44 20:48 20:54 20:58 21:00
+4-01  20:47 20:52 20:56 21:00 21:04 21:07 21:10 21:12
+4-02  21:22 21:27 21:31 21:34 21:38 21:46 21:49 21:52
+4-03  21:38 21:43 21:47 21:50 21:54 21:58 22:02 22:04
+4-04  21:57 22:02 22:07 22:10 22:14 22:15 22:19 22:21
+4-05  22:36 22:41 22:45 22:48 22:51 22:52 22:55 22:58
+4-06  23:04 23:09 23:13 23:16 23:19 23:19 23:22 23:25
+4-07  23:23 23:28 23:32 23:35 23:39 23:41 23:44 23:46
+`,
+  },
+  {
+    id: "down-nagaura-kisarazu",
+    title: "下り 長浦→木更津",
+    dir: "down",
+    source: "docs/timetables/nagaura-awakamogawa_down_1005.png（各段の上側 4行）",
+    // 誤字：2-11 の袖ケ浦「18;59」
+    rows: ["長浦発", "袖ケ浦発", "巌根発", "木更津着"],
+    cols: `
+1-04   6:28  6:32  6:36  6:40
+1-05   6:57  7:02  7:05  7:10
+1-07   7:27  7:31  7:34  7:39
+1-08   7:56  8:00  8:04  8:08
+1-09   8:30  8:34  8:37  8:42
+1-10   8:59  9:03  9:07  9:11
+1-11   9:28  9:32  9:36  9:40
+1-12   9:57 10:01 10:05 10:09
+1-13  10:27 10:31 10:34 10:39
+1-14  10:56 11:00 11:03 11:08
+1-15  11:29 11:33 11:36 11:41
+1-16  11:58 12:02 12:05 12:10
+1-17  12:28 12:32 12:36 12:40
+1-18  12:58 13:02 13:05 13:10
+1-19  13:27 13:31 13:34 13:39
+2-01  13:56 14:00 14:04 14:08
+2-02  14:25 14:29 14:33 14:37
+2-03  14:55 14:59 15:02 15:07
+2-04  15:24 15:28 15:31 15:36
+2-05  15:53 15:57 16:01 16:05
+2-06  16:25 16:29 16:33 16:37
+2-07  16:58 17:02 17:05 17:10
+2-08  17:27 17:31 17:35 17:39
+2-09  17:56 18:00 18:04 18:08
+2-10  18:25 18:29 18:33 18:37
+2-11  18:55 18:59 19:02 19:07
+2-12  19:24 19:28 19:32 19:35
+2-13  19:53 19:57 20:01 20:05
+2-14  20:22 20:27 20:30 20:34
+2-15  20:56 21:00 21:03 21:08
+2-16  21:33 21:37 21:40 21:45
+`,
+  },
+  {
+    id: "down-kisarazu-awakamogawa",
+    title: "下り 木更津→安房鴨川",
+    dir: "down",
+    source: "docs/timetables/nagaura-awakamogawa_down_1005.png（各段の下側 22行）",
+    // 誤字：1-01 の青堀「5;19」
+    // 1-02 は「平日のみ」（浜金谷の欄に注記）。保田始発・館山止まり。
+    // 1-08 は上総湊8:58で打ち切り（竹岡「＝」）。同じ列の館山9:36〜は別の列車（館山始発）。
+    // 途中駅は「発」しかないため、長く停まる駅の着時刻は model.mjs で推定する（君津など）。
+    rows: [
+      "木更津発", "君津発", "青堀発", "大貫発", "佐貫町発", "上総湊発", "竹岡発", "浜金谷発",
+      "保田発", "安房勝山発", "岩井発", "富浦発", "那古船形発", "館山発", "九重発", "千倉発",
+      "千歳発", "南三原発", "和田浦発", "江見発", "太海発", "安房鴨川着",
+    ],
+    //      木更津 君津  青堀  大貫 佐貫町 上総湊 竹岡 浜金谷 保田 勝山  岩井  富浦  那古  館山  九重  千倉  千歳 南三原 和田浦 江見 太海  鴨川
+    cols: `
+1-01   5:07  5:15  5:19  5:23  5:28  5:33  5:39  5:44  5:50  5:54  5:57  6:07  6:10  6:32  6:38  6:47  6:49  6:53  6:59  7:03  7:09  7:13
+1-02    .     .     .     .     .     .     .     .    6:44  6:48  6:52  6:58  7:01  7:05   =     .     .     .     .     .     .     .
+1-03    .     .     .     .     .     .     .     .     .     .     .     .     .    7:16  7:22  7:29  7:32  7:41  7:47  7:52  7:58  8:01
+1-04   6:47  6:54  6:58  7:11  7:19  7:24  7:30  7:36  7:40  7:44  7:47  7:53  7:56  8:00   =     .     .     .     .     .     .     .
+1-05    .     .     .     .     .     .     .     .     .     .     .     .     .    8:01  8:07  8:13  8:16  8:28  8:33  8:38  8:44  8:48
+1-06    .    7:26  7:30  7:34  7:39  8:09  8:14  8:19  8:23  8:27  8:30  8:36  8:39  8:43   =     .     .     .     .     .     .     .
+1-07   7:41  7:50  7:53  7:58  8:03  8:08   =     .     .     .     .     .     .     .     .     .     .     .     .     .     .     .
+1-08   8:30  8:37  8:41  8:49  8:53  8:58   =     .     .     .     .     .     .    9:36  9:42  9:49  9:52 10:01 10:06 10:11 10:17 10:21
+1-10   9:31  9:39  9:47  9:51  9:56 10:00 10:06 10:11 10:15 10:19 10:22 10:28 10:31 10:36 10:42 10:49 10:52 10:56 11:01 11:09 11:15 11:19
+1-14  11:17 11:37 11:41 11:46 11:51 11:56 12:02 12:11 12:15 12:19 12:23 12:29 12:32 12:43 12:49 12:55 12:58 13:02 13:08 13:12 13:18 13:22
+1-18  13:19 13:37 13:42 13:46 13:51 13:56 14:02 14:11 14:15 14:19 14:23 14:29 14:32 14:42 14:48 14:55 14:58 15:03 15:09 15:13 15:19 15:23
+2-02  15:01 15:07 15:11 15:16 15:24 15:29   =     .     .     .     .     .     .     .     .     .     .     .     .     .     .     .
+2-03  15:17 15:44 15:55 15:59 16:04 16:12 16:17 16:25 16:29 16:33 16:36 16:45 16:48 16:53 16:59 17:05 17:08 17:12 17:18 17:23 17:29 17:33
+2-06  16:42 16:49 16:53 17:00 17:05 17:13 17:18 17:23 17:27 17:31 17:34 17:40 17:43 17:47   =     .     .     .     .     .     .     .
+2-08  17:45 17:53 17:57 18:01 18:06 18:11 18:17 18:22 18:26 18:30 18:33 18:39 18:42 18:50 18:56 19:02 19:05 19:09 19:14 19:22 19:28 19:32
+2-10  18:40 18:47 18:51 18:55 19:00 19:05 19:10 19:16 19:19 19:23 19:27 19:33 19:36 19:52 19:59 20:05 20:08 20:12 20:17 20:27 20:33 20:37
+2-11  19:23 19:45 19:49 19:54 19:58 20:03 20:09 20:13 20:18 20:22 20:25 20:31 20:34 20:38   =     .     .     .     .     .     .     .
+2-14  20:36 20:44 20:48 20:53 20:57 21:02 21:08 21:13 21:17 21:21 21:25 21:31 21:34 21:38 21:44 21:51 21:53 21:57 22:03 22:07 22:13 22:17
+2-15  21:13 21:19 21:23 21:28 21:32 21:37 21:43 21:48 21:52 21:57 22:00 22:11 22:14 22:18   =     .     .     .     .     .     .     .
+2-16  21:50 21:58 22:02 22:06 22:11 22:16 22:22 22:28 22:32 22:36 22:40 22:46 22:49 22:54 23:00 23:06   =     .     .     .     .     .
+2-17    .   22:51 22:55 22:59 23:04 23:09 23:15 23:20 23:24 23:28 23:31 23:37 23:40 23:44   =     .     .     .     .     .     .     .
+2-18  23:14 23:21 23:25 23:29 23:34 23:39 23:45 23:50 23:54 23:58  0:01  0:07  0:10  0:14   =     .     .     .     .     .     .     .
+`,
+    weekdayOnly: ["1-02"],
+    // 矢印（→ / ←）：同じ駅で必ず接続する。at の駅に from で着く列車 → to で発つ列車。
+    links: [
+      { at: "館山", from: "7:05", to: "7:16" },
+      { at: "館山", from: "8:00", to: "8:01" },
+      { at: "上総湊", from: "8:08", to: "8:09" }, // 画像では ← （木更津7:41発 → 君津7:26発の列車）
+    ],
+  },
+  {
+    id: "up-awakamogawa-kisarazu",
+    title: "上り 安房鴨川→木更津",
+    dir: "up",
+    source: "docs/timetables/awakamogawa-nagaura_up_1005.png（各段の上側 22行）",
+    // 誤字：1-16 の安房鴨川「9;40」、2-13 の太海「18;09」
+    // 1-05 は君津7:18で打ち切り（木更津「＝」）。
+    // 1-09 は館山7:58で打ち切り（那古船形「＝」）。同じ列の上総湊8:15〜君津8:36は別の列車（上総湊始発、君津止まり）。
+    // 1-11 は館山8:49で打ち切り（那古船形「＝」）。同じ列の上総湊9:04〜木更津9:31は別の列車（上総湊始発）。
+    rows: [
+      "安房鴨川発", "太海発", "江見発", "和田浦発", "南三原発", "千歳発", "千倉発", "九重発",
+      "館山発", "那古船形発", "富浦発", "岩井発", "安房勝山発", "保田発", "浜金谷発", "竹岡発",
+      "上総湊発", "佐貫町発", "大貫発", "青堀発", "君津発", "木更津着",
+    ],
+    //      鴨川  太海  江見 和田浦 南三原 千歳  千倉  九重  館山  那古  富浦  岩井  勝山  保田 浜金谷 竹岡 上総湊 佐貫町 大貫 青堀  君津 木更津
+    cols: `
+1-01    .     .     .     .     .     .     .     .    4:45  4:49  4:53  4:59  5:02  5:06  5:10  5:15  5:21  5:28  5:33  5:37  5:41  5:47
+1-04    .     .     .     .     .     .    5:46  5:52  5:58  6:03  6:06  6:12  6:15  6:19  6:23  6:28  6:34  6:39  6:43  6:48  6:52  7:00
+1-05    .     .     .     .     .     .     .     .    6:20  6:24  6:27  6:33  6:37  6:41  6:45  6:49  7:01  7:06  7:10  7:15  7:18   =
+1-06    .     .     .     .     .     .     .     .    6:35  6:39  6:42  6:52  6:55  6:59  7:03  7:08  7:14  7:19  7:23  7:33  7:44  7:51
+1-07   6:18  6:23  6:29  6:34  6:39  6:43  6:47  6:52  6:59   =     .     .     .     .     .     .     .     .     .     .     .     .
+1-08    .     .     .     .     .     .     .     .    7:10  7:14  7:17  7:23  7:27  7:31  7:36  7:41  7:46  7:51  7:58  8:03  8:07  8:13
+1-09   7:18  7:23  7:28  7:33  7:39  7:43  7:46  7:52  7:58   =     .     .     .     .     .     .    8:15  8:23  8:28  8:32  8:36   =
+1-10    .     .     .     .     .     .     .     .    8:01  8:06  8:09  8:15  8:18  8:23  8:27  8:32  8:39  8:44  8:48  8:53  9:03  9:10
+1-11   8:04  8:09  8:15  8:20  8:30  8:34  8:37  8:43  8:49   =     .     .     .     .     .     .    9:04  9:09  9:13  9:21  9:24  9:31
+1-14    .     .     .     .     .     .     .     .    9:40  9:45  9:48  9:55  9:58 10:07 10:11 10:16 10:22 10:30 10:39 10:44 11:00 11:08
+1-16   9:40  9:44  9:50  9:55 10:00 10:04 10:08 10:14 10:38 10:42 10:46 10:52 10:55 11:01 11:09 11:14 11:20 11:26 11:31 11:42 11:56 12:03
+1-18  10:59 11:03 11:09 11:14 11:19 11:23 11:26 11:32 11:45 11:49 11:52 11:59 12:02 12:06 12:13 12:18 12:24 12:29 12:33 12:42 12:56 13:04
+2-03  12:59 13:03 13:13 13:18 13:23 13:27 13:30 13:36 13:44 13:49 13:52 13:58 14:02 14:06 14:13 14:18 14:24 14:29 14:33 14:42 15:02 15:10
+2-05    .     .     .     .     .     .     .     .     .     .     .     .     .     .     .     .   15:47 15:52 16:00 16:04 16:09 16:15
+2-06  14:53 14:57 15:03 15:09 15:14 15:18 15:21 15:27 15:37 15:41 15:44 15:50 15:53 15:57 16:01 16:06 16:12 16:16 16:21 16:25 16:39 16:47
+2-11  17:00 17:05 17:11 17:20 17:26 17:30 17:33 17:39 17:48 17:52 17:55 18:01 18:04 18:08 18:12 18:18 18:24 18:29 18:38 18:51 19:00 19:08
+2-13  18:04 18:09 18:18 18:23 18:29 18:33 18:36 18:42 18:49 18:53 18:56 19:02 19:05 19:09 19:15 19:20 19:26 19:32 19:36 19:41 19:50 19:58
+2-15    .     .     .     .     .     .     .     .   19:56 20:01 20:04 20:09 20:13 20:18 20:22 20:27 20:32 20:37 20:42 20:49 20:53 21:01
+2-16  20:16 20:20 20:26 20:31 20:36 20:40 20:43 20:49 20:56 21:00 21:04 21:09 21:13 21:17 21:22 21:26 21:37 21:42 21:47 21:51 21:55 22:03
+2-17  21:18 21:22 21:28 21:34 21:39 21:43 21:51 21:56 22:03 22:07 22:10 22:16 22:20 22:24 22:28 22:33 22:39 22:43 22:48 22:55 22:59 23:05
+`,
+    links: [
+      { at: "館山", from: "6:59", to: "7:10" },
+      { at: "館山", from: "7:58", to: "8:01" },
+    ],
+  },
+  {
+    id: "up-kisarazu-nagaura",
+    title: "上り 木更津→長浦",
+    dir: "up",
+    source: "docs/timetables/awakamogawa-nagaura_up_1005.png（各段の下側 4行）",
+    // 誤字：1-09 の袖ケ浦「8;58」
+    rows: ["木更津発", "巌根発", "袖ケ浦発", "長浦着"],
+    cols: `
+1-01   5:50  5:54  5:58  6:03
+1-02   6:19  6:23  6:27  6:32
+1-03   6:48  6:53  6:56  7:02
+1-04   7:18  7:22  7:26  7:31
+1-06   7:53  7:57  8:01  8:06
+1-08   8:21  8:25  8:29  8:34
+1-09   8:50  8:54  8:58  9:03
+1-10   9:19  9:24  9:27  9:32
+1-11   9:49  9:53  9:56 10:02
+1-12  10:18 10:22 10:26 10:31
+1-13  10:51 10:55 10:58 11:04
+1-14  11:20 11:24 11:28 11:33
+1-15  11:50 11:55 11:58 12:03
+1-16  12:20 12:24 12:27 12:33
+1-17  12:49 12:53 12:57 13:02
+1-18  13:18 13:22 13:26 13:31
+1-19  13:47 13:52 13:55 14:00
+2-01  14:17 14:21 14:24 14:30
+2-02  14:46 14:50 14:54 14:59
+2-03  15:15 15:19 15:23 15:28
+2-04  15:44 15:49 15:52 15:57
+2-05  16:20 16:24 16:27 16:33
+2-06  16:49 16:53 16:57 17:02
+2-07  17:18 17:22 17:26 17:31
+2-08  17:47 17:51 17:55 18:00
+2-09  18:16 18:21 18:24 18:30
+2-10  18:45 18:50 18:54 18:59
+2-11  19:15 19:19 19:23 19:28
+2-12  19:44 19:48 19:52 19:57
+2-13  20:15 20:19 20:23 20:28
+2-14  20:48 20:52 20:55 21:01
+`,
+  },
+];
+
+/* ---- src/model.mjs ---- */
+/* ===== 時刻表データ → 列車リスト ===== */
+
+
+/* "H:MM" → 分。0〜3時台は24時以降として扱う。画像の誤字「;」も「:」として読む。 */
+function tm(s) {
+  const [h, m] = s.replace(";", ":").split(":").map(Number);
+  return (h < 4 ? h + 24 : h) * 60 + m;
+}
+function fmt(x) {
+  const h = Math.floor(x / 60) % 24, m = x % 60;
+  return h + ":" + String(m).padStart(2, "0");
+}
+
+const TIME_RE = /^\d{1,2}[:;]\d{2}$/;
+/* 「着」がない駅で、推定着が発より この分数以上早いときだけ推定値を使う（長い停車とみなす） */
+const LONG_DWELL_MIN = 3;
+
+/* 行ラベル "蘇我着" → {s, kind:"arr"|"dep"} */
+function parseRow(label) {
+  const kind = label.endsWith("着") ? "arr" : "dep";
+  const name = label.replace(/[発着]$/, "");
+  if (!(name in SI)) throw new Error(`未知の駅名: ${label}`);
+  return { s: SI[name], kind };
+}
+
+/* 1列（セルの配列）を「＝」で区切り、列車ごとのセル範囲に分ける */
+function splitColumn(cells, problems, where) {
+  const segs = [];
+  let cur = [];
+  cells.forEach((c, i) => {
+    if (c === "=") {
+      if (!cur.length) problems.push(`${where}: 「＝」の直前に時刻がない（${i + 1}行目）`);
+      else if (cells[i - 1] === ".") problems.push(`${where}: 「＝」の直前が空欄（${i + 1}行目）`);
+      if (cur.length) segs.push(cur);
+      cur = [];
+    } else if (c !== ".") {
+      if (cur.length && cells[i - 1] === ".") problems.push(`${where}: 列車の途中に空欄がある（${i + 1}行目の手前）`);
+      cur.push(i);
+    }
+  });
+  if (cur.length) segs.push(cur);
+  return segs;
+}
+
+/**
+ * 全時刻表を読み込み、列車とリンク（矢印の接続）を返す。
+ * train: {id, table, col, dir, weekdayOnly, stops:[{s, arr, dep, arrGiven, arrEst?}]}
+ *   arr = その駅に着く時刻、dep = その駅を出る時刻（始発駅の arr / 終着駅の dep は同じ値）
+ *   arrGiven = 時刻表に「着」がある、arrEst = 着時刻を推定した（画面では「頃」を付ける）
+ * link:  {at, fromTrain, toTrain, arr, dep}  … 乗換余裕に関係なく必ず乗り継げる
+ * problems: データの書式上の問題（空なら OK）
+ */
+function buildModel(tables = TABLES) {
+  const trains = [], links = [], problems = [];
+  for (const tb of tables) {
+    const rows = tb.rows.map(parseRow);
+    const lines = tb.cols.trim().split("\n").map(l => l.trim().split(/\s+/));
+    const weekday = new Set(tb.weekdayOnly || []);
+    for (const [col, ...cells] of lines) {
+      const where = `${tb.title} 列${col}`;
+      if (cells.length !== rows.length) {
+        problems.push(`${where}: セル数 ${cells.length}（行数 ${rows.length} と不一致）`);
+        continue;
+      }
+      cells.forEach((c, i) => {
+        if (c !== "." && c !== "=" && !TIME_RE.test(c)) problems.push(`${where}: 読めないセル "${c}"（${tb.rows[i]}）`);
+      });
+      for (const seg of splitColumn(cells, problems, where)) {
+        const stops = [];
+        for (const i of seg) {
+          const { s, kind } = rows[i];
+          let st = stops[stops.length - 1];
+          if (!st || st.s !== s) stops.push(st = { s });
+          st[kind] = tm(cells[i]);
+        }
+        for (const st of stops) {
+          st.arrGiven = st.arr !== undefined; // 時刻表に「着」が載っているか
+          st.arr ??= st.dep;
+          st.dep ??= st.arr;
+        }
+        if (stops.length < 2) { problems.push(`${where}: 停車駅が1つしかない列車`); continue; }
+        trains.push({
+          id: trains.length, table: tb.id, col, dir: tb.dir,
+          weekdayOnly: weekday.has(col), stops,
+        });
+      }
+    }
+    for (const lk of tb.links || []) {
+      const s = SI[lk.at], a = tm(lk.from), d = tm(lk.to);
+      const mine = trains.filter(t => t.table === tb.id);
+      // 着側は時刻表に書かれた時刻（着がなければ発の欄の時刻）で照合する
+      const fromT = mine.filter(t => { const st = t.stops.find(x => x.s === s); return st && st !== t.stops[0] && (st.arrGiven ? st.arr : st.dep) === a; });
+      const toT = mine.filter(t => { const st = t.stops.find(x => x.s === s); return st && st !== t.stops.at(-1) && st.dep === d; });
+      if (fromT.length !== 1 || toT.length !== 1) {
+        problems.push(`${tb.title} 接続 ${lk.at} ${lk.from}→${lk.to}: 列車が特定できない（着${fromT.length}本・発${toT.length}本）`);
+        continue;
+      }
+      links.push({ at: s, fromTrain: fromT[0].id, toTrain: toT[0].id, arr: a, dep: d });
+    }
+  }
+  estimateArrivals(trains);
+  return { trains, links, problems };
+}
+
+/* 隣り合う駅間（方向つき）の最短所要：全列車での「次駅の着（なければ発）− 前駅の発」の最小値 */
+function minRunTimes(trains) {
+  const best = new Map();
+  for (const t of trains) {
+    for (let k = 1; k < t.stops.length; k++) {
+      const pv = t.stops[k - 1], st = t.stops[k];
+      const key = pv.s + "-" + st.s;
+      const run = (st.arrGiven ? st.arr : st.dep) - pv.dep;
+      if (!best.has(key) || run < best.get(key)) best.set(key, run);
+    }
+  }
+  return best;
+}
+
+/* 「着」がない駅の着時刻を推定する：着 = min(その駅の発, 前の駅の発 + 最短所要)。
+ * 差が LONG_DWELL_MIN 未満なら推定せず発時刻のまま（普通の停車で「頃」が乱発しないように）。 */
+function estimateArrivals(trains) {
+  const best = minRunTimes(trains);
+  for (const t of trains) {
+    for (let k = 1; k < t.stops.length; k++) {
+      const pv = t.stops[k - 1], st = t.stops[k];
+      if (st.arrGiven) continue;
+      const est = pv.dep + best.get(pv.s + "-" + st.s);
+      if (st.dep - est >= LONG_DWELL_MIN) { st.arr = est; st.arrEst = true; }
+    }
+  }
+}
+
+/* 健全性チェック：駅の並び順と時刻の単調増加。違反を文字列の配列で返す。 */
+function checkTrains(trains) {
+  const out = [];
+  for (const t of trains) {
+    const where = `${t.table} 列${t.col}（${STATIONS[t.stops[0].s]} ${fmt(t.stops[0].dep)}発）`;
+    for (let k = 0; k < t.stops.length; k++) {
+      const st = t.stops[k];
+      if (st.arr > st.dep) out.push(`${where}: ${STATIONS[st.s]} 着${fmt(st.arr)} が 発${fmt(st.dep)} より遅い`);
+      if (k === 0) continue;
+      const pv = t.stops[k - 1];
+      const step = st.s - pv.s;
+      if (t.dir === "down" ? step <= 0 : step >= 0) out.push(`${where}: ${STATIONS[pv.s]}→${STATIONS[st.s]} の駅順が${t.dir === "down" ? "下り" : "上り"}と逆`);
+      if (st.arr <= pv.dep) out.push(`${where}: ${STATIONS[pv.s]} 発${fmt(pv.dep)} → ${STATIONS[st.s]} ${fmt(st.arr)} が単調増加でない`);
+    }
+  }
+  return out;
+}
+
+/* ---- src/search.mjs ---- */
+/* ===== 経路検索（connection scan） ===== */
+
+const SERVICE_START = 4 * 60;  // 4:00
+const SERVICE_END = 28 * 60;   // 翌4:00（0時台は24時以降として扱う）
+
+/**
+ * 検索用のネットワークを作る。dayType: "weekday"（平日）| "holiday"（土休日。平日のみの列車を除く）
+ */
+function buildNetwork(model, { dayType = "weekday" } = {}) {
+  const trains = model.trains.filter(t => dayType === "weekday" || !t.weekdayOnly);
+  const ok = new Set(trains.map(t => t.id));
+  const conns = [];
+  for (const t of trains) {
+    for (let k = 0; k < t.stops.length - 1; k++) {
+      const a = t.stops[k], b = t.stops[k + 1];
+      conns.push({ from: a.s, to: b.s, dep: a.dep, arr: b.arr, arrEst: !!b.arrEst, trip: t.id });
+    }
+  }
+  conns.sort((x, y) => x.dep - y.dep || x.arr - y.arr);
+  // 矢印の接続：「列車:駅」→ その駅で必ず接続する列車
+  const linksFrom = new Map();
+  for (const l of model.links) {
+    if (!ok.has(l.fromTrain) || !ok.has(l.toTrain)) continue;
+    const key = l.fromTrain + ":" + l.at;
+    if (!linksFrom.has(key)) linksFrom.set(key, []);
+    linksFrom.get(key).push(l.toTrain);
+  }
+  const byId = new Map(model.trains.map(t => [t.id, t]));
+  return { conns, linksFrom, byId, dayType };
+}
+
+function busPeer(s) { return s === BUS.a ? BUS.b : s === BUS.b ? BUS.a : -1; }
+
+/**
+ * 時刻 t 以降に origin を出て dest に最も早く着く経路。なければ null。
+ * opts: {margin: 乗換余裕(分), busMin: バス所要(分), busFirst/busLast: バスの始発・最終の発車時刻(分。null=指定なし)}
+ * 乗換余裕は列車→列車、バス→列車の乗り継ぎにかかる。矢印の接続は余裕に関係なく乗り継げる。
+ * バスは運行時間内なら随時乗れるとみなす（始発より前に着いたら始発まで待つ。最終より後は乗れない）。
+ * 戻り値: {dep, arr, legs:[{type:"train"|"bus", from, to, dep, arr, arrEst?, train?, linked?}]}
+ */
+function earliest(net, origin, dest, t, { margin = 2, busMin = BUS.defaultMin, busFirst = null, busLast = null } = {}) {
+  if (origin === dest) return null;
+  const N = STATIONS.length, INF = 1e9;
+  const arr = Array(N).fill(INF), board = Array(N).fill(INF), label = Array(N).fill(null);
+  const ride = new Map();      // 乗っている列車 → {enter, prev, linked}
+  const linkBoard = new Map(); // 矢印で乗り継げる列車 → 前の区間のラベル
+  arr[origin] = t; board[origin] = t;
+
+  const relaxBus = (s, time, prev) => {
+    const o = busPeer(s);
+    if (o < 0) return;
+    const dep = busFirst == null ? time : Math.max(time, busFirst);
+    if (busLast != null && dep > busLast) return;
+    const a = dep + busMin;
+    if (a < arr[o]) { arr[o] = a; board[o] = a + margin; label[o] = { type: "bus", from: s, to: o, dep, arr: a, prev }; }
+  };
+  const trainLabel = (r, c) => ({
+    type: "train", train: c.trip, from: r.enter.from, to: c.to, dep: r.enter.dep, arr: c.arr,
+    arrEst: c.arrEst, linked: r.linked, prev: r.prev,
+  });
+
+  relaxBus(origin, t, null);
+  for (const c of net.conns) {
+    if (c.dep < t) continue;
+    if (arr[dest] <= c.dep) break;
+    let r = ride.get(c.trip);
+    if (!r) {
+      const lk = linkBoard.get(c.trip);
+      if (board[c.from] <= c.dep) r = { enter: c, prev: label[c.from], linked: false };
+      else if (lk && lk.to === c.from) r = { enter: c, prev: lk, linked: true };
+      else continue;
+      ride.set(c.trip, r);
+    }
+    const lks = net.linksFrom.get(c.trip + ":" + c.to);
+    if (lks) for (const to of lks) if (!linkBoard.has(to)) linkBoard.set(to, trainLabel(r, c));
+    if (c.arr < arr[c.to]) {
+      arr[c.to] = c.arr; board[c.to] = c.arr + margin;
+      label[c.to] = trainLabel(r, c);
+      relaxBus(c.to, c.arr, label[c.to]);
+    }
+  }
+  if (!label[dest]) return null;
+  const legs = [];
+  for (let l = label[dest]; l; l = l.prev) {
+    const { prev, ...leg } = l;
+    if (leg.type === "train") leg.weekdayOnly = !!net.byId.get(leg.train).weekdayOnly;
+    legs.unshift(leg);
+  }
+  return { dep: legs[0].dep, arr: arr[dest], legs };
+}
+
+/**
+ * 出発時刻指定（mode "dep"）／到着時刻指定（mode "arr"）で、最大 limit 件の経路を返す（v1 と同じ考え方）。
+ * "dep" は早く出る順、"arr" は遅く出る順（先頭が「最終」）。
+ */
+function journeys(net, origin, dest, mode, time, opts = {}, limit = 6) {
+  const span = 7 * 60;
+  const lo = mode === "dep" ? time : Math.max(SERVICE_START, time - span);
+  const hi = mode === "dep" ? Math.min(SERVICE_END, time + span) : time;
+  const map = new Map();
+  for (let t = lo; t <= hi; t++) {
+    const j = earliest(net, origin, dest, t, opts);
+    if (!j) continue;
+    if (mode === "arr" && j.arr > time) continue;
+    const prev = map.get(j.arr);
+    if (!prev || j.dep > prev.dep) map.set(j.arr, j);
+  }
+  // 遅く出て早く（同じに）着く経路があるものは除く
+  let list = [...map.values()].sort((a, b) => a.dep - b.dep);
+  list = list.filter(j => !list.some(k => k !== j && k.dep >= j.dep && k.arr <= j.arr));
+  if (list.length && list.every(j => j.legs.every(l => l.type === "bus"))) return mode === "dep" ? list.slice(0, 1) : list.slice(-1);
+  return mode === "dep" ? list.slice(0, limit) : list.reverse().slice(0, limit);
+}
+
+/**
+ * 区間の最終：その日のうち（翌4:00まで）に dest へ着ける、最も遅い出発の経路。
+ * バスだけの区間（姉ヶ崎↔長浦）は {busOnly:true} を返す。列車がなければ null。
+ */
+function lastJourney(net, origin, dest, opts = {}) {
+  if (origin === dest) return null;
+  if (busPeer(origin) === dest) return { busOnly: true };
+  if (!earliest(net, origin, dest, SERVICE_START, opts)) return null;
+  // 経路があるかどうかは出発時刻について単調（早く出れば待てばよい）なので二分探索
+  let lo = SERVICE_START, hi = SERVICE_END;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (earliest(net, origin, dest, mid, opts)) lo = mid; else hi = mid - 1;
+  }
+  return earliest(net, origin, dest, lo, opts);
+}
+
+const TIGHT_MIN = 2;          // 乗換がこの分数以下なら「ギリギリ」
+const BUS_UNSURE_FROM = 22 * 60, BUS_UNSURE_TO = 6 * 60; // 運行時間が未指定のとき「未確認」とする時間帯
+
+/**
+ * 画面に出す注意点をまとめる。
+ * transfers[k] … legs[k] と legs[k+1] の間：{wait, tight, linked, est(到着が推定), toBus}
+ * busUnsure … 運行時間が未指定のまま、22:00以降／6:00前のバスを使っている
+ * busStart  … 最初の区間がバス（出発時刻は時刻表の発車ではなく「この時刻までに乗車」）
+ */
+function annotate(j, { busFirst = null, busLast = null } = {}) {
+  const transfers = [];
+  for (let k = 1; k < j.legs.length; k++) {
+    const a = j.legs[k - 1], b = j.legs[k];
+    const wait = b.dep - a.arr;
+    const toBus = b.type === "bus";
+    transfers.push({
+      wait, toBus, linked: !!b.linked, est: !!a.arrEst,
+      tight: !toBus && !b.linked && wait <= TIGHT_MIN,
+    });
+  }
+  const busUnsure = j.legs.some(l => l.type === "bus" &&
+    ((busLast == null && l.dep >= BUS_UNSURE_FROM) || (busFirst == null && l.dep < BUS_UNSURE_TO)));
+  return {
+    transfers,
+    tight: transfers.some(t => t.tight),
+    estTransfer: transfers.some(t => t.est && !t.toBus),
+    busUnsure,
+    busStart: j.legs[0].type === "bus",
+    hasBus: j.legs.some(l => l.type === "bus"),
+    weekdayOnly: j.legs.some(l => l.weekdayOnly),
+    arrEst: !!j.legs.at(-1).arrEst,
+  };
+}
+
+/* ---- src/ui/app.mjs ---- */
+/* ===== UI（検索画面） ===== */
+
+
+
+const MODEL = buildModel();
+const NETS = { weekday: buildNetwork(MODEL, { dayType: "weekday" }), holiday: buildNetwork(MODEL, { dayType: "holiday" }) };
+const STORE_KEY = "uchibo-v2";
+const GROUPS = [["千葉〜姉ヶ崎", 0, 6], ["長浦〜木更津", 7, 10], ["君津〜館山", 11, 23], ["九重〜安房鴨川", 24, 31]];
+
+const $ = id => document.getElementById(id);
+const fromSel = $("from"), toSel = $("to");
+for (const sel of [fromSel, toSel]) {
+  for (const [name, a, b] of GROUPS) {
+    const g = document.createElement("optgroup");
+    g.label = name;
+    for (let i = a; i <= b; i++) g.appendChild(new Option(STATIONS[i], i));
+    sel.appendChild(g);
+  }
+}
+
+const state = { mode: "dep", dayType: "weekday", showLast: false };
+
+function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; } }
+function save() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      from: fromSel.value, to: toSel.value, mode: state.mode, margin: $("margin").value,
+      busMin: $("busMin").value, busFirst: $("busFirst").value, busLast: $("busLast").value,
+    }));
+  } catch (e) { /* localStorage が使えなくても動く */ }
+}
+const saved = load();
+fromSel.value = saved.from ?? "11";
+toSel.value = saved.to ?? "0";
+if (saved.margin) $("margin").value = saved.margin;
+if (saved.mode === "arr" || saved.mode === "dep") state.mode = saved.mode;
+$("busMin").value = clampBus(saved.busMin ?? BUS.defaultMin);
+$("busFirst").value = saved.busFirst || "";
+$("busLast").value = saved.busLast || "";
+const dow = new Date().getDay();
+state.dayType = dow === 0 || dow === 6 ? "holiday" : "weekday";
+
+function clampBus(v) { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(120, Math.max(1, n)) : BUS.defaultMin; }
+function nowStr() { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+function timeVal(el) { return el.value ? tm(el.value) : null; }
+function opts() {
+  return { margin: +$("margin").value, busMin: clampBus($("busMin").value), busFirst: timeVal($("busFirst")), busLast: timeVal($("busLast")) };
+}
+$("time").value = nowStr();
+
+function setPressed() {
+  $("mDep").setAttribute("aria-pressed", state.mode === "dep");
+  $("mArr").setAttribute("aria-pressed", state.mode === "arr");
+  $("dWk").setAttribute("aria-pressed", state.dayType === "weekday");
+  $("dHol").setAttribute("aria-pressed", state.dayType === "holiday");
+}
+function rerun() { state.showLast = false; run(); }
+$("mDep").onclick = () => { state.mode = "dep"; rerun(); };
+$("mArr").onclick = () => { state.mode = "arr"; rerun(); };
+$("dWk").onclick = () => { state.dayType = "weekday"; run(); };
+$("dHol").onclick = () => { state.dayType = "holiday"; run(); };
+$("swap").onclick = () => { const a = fromSel.value; fromSel.value = toSel.value; toSel.value = a; run(); };
+$("now").onclick = () => { $("time").value = nowStr(); rerun(); };
+$("last").onclick = () => { state.showLast = true; run(); };
+$("busDec").onclick = () => { $("busMin").value = clampBus(+$("busMin").value - 1); run(); };
+$("busInc").onclick = () => { $("busMin").value = clampBus(+$("busMin").value + 1); run(); };
+$("busMin").addEventListener("change", () => { $("busMin").value = clampBus($("busMin").value); run(); });
+$("busClear").onclick = () => { $("busFirst").value = ""; $("busLast").value = ""; run(); };
+[fromSel, toSel, $("margin"), $("busFirst"), $("busLast")].forEach(el => el.addEventListener("change", run));
+$("time").addEventListener("change", rerun);
+$("f").addEventListener("submit", e => { e.preventDefault(); run(); });
+
+function durStr(m) { const h = Math.floor(m / 60), mm = m % 60; return h ? `${h}時間${mm}分` : `${mm}分`; }
+function busHoursStr(o) {
+  if (o.busFirst == null && o.busLast == null) return "運行時間 指定なし";
+  return `運行 ${o.busFirst == null ? "指定なし" : fmt(o.busFirst)}〜${o.busLast == null ? "指定なし" : fmt(o.busLast)}`;
+}
+const tmHtml = (x, est) => `${fmt(x)}${est ? "<small>頃</small>" : ""}`;
+
+function render(j, i, o, tag) {
+  const a = annotate(j, o);
+  let html = "";
+  j.legs.forEach((l, k) => {
+    const isBus = l.type === "bus";
+    if (k === 0 && isBus) {
+      html += `<li class="stop bus"><span class="tm">${fmt(l.dep)}</span><span class="dot"></span><span class="nm">${STATIONS[l.from]} バス乗車 <em>この時刻までに（随時運行と仮定）</em></span></li>`;
+    } else {
+      html += `<li class="stop${isBus ? " bus" : ""}"><span class="tm">${fmt(l.dep)}</span><span class="dot"></span><span class="nm">${STATIONS[l.from]} ${isBus ? "バス乗車" : "発"}</span></li>`;
+    }
+    let info;
+    if (isBus) info = `バス（${o.busMin}分想定・随時運行と仮定）`;
+    else {
+      const tr = MODEL.trains[l.train];
+      info = `内房線 ${STATIONS[tr.stops.at(-1).s]}行　${l.arr - l.dep}分${l.weekdayOnly ? "　<b>平日のみ</b>" : ""}`;
+    }
+    html += `<li class="seg-line${isBus ? " bus" : ""}"><span></span><span class="bar"></span><span class="info">${info}</span></li>`;
+    html += `<li class="stop${isBus ? " bus" : ""}"><span class="tm">${tmHtml(l.arr, l.arrEst)}</span><span class="dot"></span><span class="nm">${STATIONS[l.to]} 着</span></li>`;
+    const t = a.transfers[k];
+    if (t) {
+      let cls = "", txt;
+      if (t.toBus) txt = t.wait > 0 ? `バス待ち ${t.wait}分` : "そのままバスへ";
+      else if (t.linked) { cls = " linked"; txt = `乗換 ${t.wait}分・矢印の接続（必ず接続）`; }
+      else {
+        txt = `乗換 ${t.est ? "約" : ""}${t.wait}分`;
+        if (t.est) { cls = " est"; txt += "（到着は推定）"; }
+        if (t.tight) { cls = " tight"; txt += "・ギリギリ"; }
+      }
+      html += `<li class="wait${cls}"><span></span><span class="bar"></span><span>${txt}</span></li>`;
+    }
+  });
+  const chips = [
+    tag ? `<span class="chip tag">${tag}</span>` : "",
+    `<span class="chip">乗換${j.legs.length - 1}回</span>`,
+    a.hasBus ? '<span class="chip bus">バス利用</span>' : "",
+    a.weekdayOnly ? '<span class="chip">平日のみの列車</span>' : "",
+    a.transfers.some(t => t.linked) ? '<span class="chip ok">矢印の接続</span>' : "",
+    a.tight ? '<span class="chip warn">乗換2分以下あり</span>' : "",
+    a.estTransfer ? '<span class="chip est">到着時刻は推定</span>' : "",
+  ].join("");
+  const notes = [
+    a.busStart ? `<p class="note">${STATIONS[j.legs[0].from]} ${fmt(j.dep)} までにバスに乗車（${o.busMin}分想定）。時刻表上の発車時刻ではありません。</p>` : "",
+    a.busUnsure ? `<p class="note">バスの運行時間は未確認です（22時以降・6時前のバスを含みます）。設定で始発・最終を指定できます。</p>` : "",
+  ].join("");
+  return `<article class="card${i === 0 ? " best" : ""}">
+    <div class="top"><span class="t">${fmt(j.dep)}${a.busStart ? '<small class="by">までに乗車</small>' : ""}</span><span class="arrow">→</span><span class="t">${tmHtml(j.arr, a.arrEst)}</span>
+      <span class="dur"><b>${durStr(j.arr - j.dep)}</b></span></div>
+    <div class="chips">${chips}</div>${notes}
+    <details class="route"${i === 0 ? " open" : ""}><summary>経路を見る</summary><ol class="legs">${html}</ol></details>
+  </article>`;
+}
+
+function run() {
+  save();
+  setPressed();
+  const o = opts();
+  $("setSummary").textContent = `余裕${o.margin}分・バス${o.busMin}分・${busHoursStr(o)}`;
+  const from = +fromSel.value, to = +toSel.value;
+  const net = NETS[state.dayType];
+  const res = $("results"), sum = $("summary");
+  const day = state.dayType === "weekday" ? "平日" : "土休日";
+  if (from === to) { res.innerHTML = '<div class="empty">出発駅と到着駅が同じです。別の駅を選んでください。</div>'; sum.textContent = ""; return; }
+
+  if (state.showLast) {
+    const j = lastJourney(net, from, to, o);
+    sum.textContent = `${STATIONS[from]} → ${STATIONS[to]}　この区間の最終（${day}・乗換余裕${o.margin}分）`;
+    if (!j) { res.innerHTML = '<div class="empty">この区間に乗れる列車がありません。</div>'; return; }
+    if (j.busOnly) {
+      res.innerHTML = `<div class="empty">${STATIONS[from]}〜${STATIONS[to]}はバスのみの区間です（${o.busMin}分想定）。${o.busLast == null ? "バスの最終は未確認です。" : `設定上のバス最終は ${fmt(o.busLast)} です。`}</div>`;
+      return;
+    }
+    res.innerHTML = render(j, 0, o, "最終");
+    return;
+  }
+
+  const time = tm($("time").value || "09:00");
+  const list = journeys(net, from, to, state.mode, time, o);
+  sum.textContent = `${STATIONS[from]} → ${STATIONS[to]}　${fmt(time)} ${state.mode === "dep" ? "以降に出発" : "までに到着"}（${day}・乗換余裕${o.margin}分）`;
+  if (!list.length) {
+    res.innerHTML = `<div class="empty">${state.mode === "dep" ? "この時刻以降に乗れる列車がありません。" : "この時刻までに着ける列車がありません。"}時刻を変えてみてください。</div>`;
+    return;
+  }
+  res.innerHTML = list.map((j, i) => render(j, i, o, i === 0 ? (state.mode === "arr" ? "最終" : "先発") : "")).join("");
+}
+run();
+</script>

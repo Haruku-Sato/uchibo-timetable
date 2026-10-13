@@ -1,7 +1,9 @@
 /* node tests/run.mjs */
 import { buildModel, checkTrains, fmt, tm } from "../src/model.mjs";
 import { STATIONS, SI } from "../src/data/stations.mjs";
-import { buildNetwork, earliest, journeys, lastJourney } from "../src/search.mjs";
+import { buildNetwork, earliest, journeys, lastJourney, annotate } from "../src/search.mjs";
+import { build, bundleScript } from "../build.mjs";
+import vm from "node:vm";
 
 let failed = 0, passed = 0;
 function test(name, fn) {
@@ -172,6 +174,89 @@ test("千葉→安房鴨川：経路が見つかり、駅と時刻がつなが�
   for (const j of list) j.legs.forEach((l, k) => {
     if (k && (l.from !== j.legs[k - 1].to || l.dep < j.legs[k - 1].arr)) throw new Error(legStr(j));
   });
+});
+
+/* ===== バスの運行時間（FEEDBACK 段階2-1） ===== */
+test("運行時間 指定なし：千葉→長浦の最終は0:10発（バス0:31発）、未確認の注意が出る", () => {
+  const j = lastJourney(net, SI["千葉"], SI["長浦"], O);
+  eq(fmt(j.dep), "0:10", legStr(j));
+  eq(annotate(j, O).busUnsure, true);
+});
+test("バス最終21:30：千葉→長浦の最終は姉ヶ崎21:30以前に着く列車", () => {
+  const o = { ...O, busLast: tm("21:30") };
+  const j = lastJourney(net, SI["千葉"], SI["長浦"], o);
+  const bus = j.legs.find(l => l.type === "bus");
+  if (!(j.legs[0].arr <= tm("21:30") && bus.dep <= tm("21:30"))) throw new Error(legStr(j));
+  eq(fmt(j.dep), "21:04", legStr(j));
+  eq(annotate(j, o).busUnsure, false);
+});
+test("バス始発6:00：長浦→千葉の始発は6:00以降のバス", () => {
+  const o = { ...O, busFirst: tm("6:00") };
+  const j = earliest(net, SI["長浦"], SI["千葉"], tm("4:30"), o);
+  eq(fmt(j.legs[0].dep), "6:00", legStr(j)); eq(fmt(j.legs[1].dep), "6:44");
+  eq(annotate(j, O).busUnsure, false); // 6:00 は「6:00より前」ではない
+  const k = earliest(net, SI["長浦"], SI["千葉"], tm("4:30"), O);
+  eq(fmt(k.legs[0].dep), "4:30"); eq(annotate(k, O).busUnsure, true);
+});
+test("バス最終は24時以降も扱える（0:31なら千葉0:10発、0:30なら23:50発）", () => {
+  eq(fmt(lastJourney(net, SI["千葉"], SI["長浦"], { ...O, busLast: tm("0:31") }).dep), "0:10");
+  eq(fmt(lastJourney(net, SI["千葉"], SI["長浦"], { ...O, busLast: tm("0:30") }).dep), "23:50");
+});
+
+/* ===== 画面の注意点（annotate） ===== */
+test("出発がバスになる最終（姉ヶ崎→木更津）：busStart、出発は木更津行最終に間に合う時刻", () => {
+  const j = lastJourney(net, SI["姉ヶ崎"], SI["木更津"], O);
+  const a = annotate(j, O);
+  eq(a.busStart, true); eq(fmt(j.dep), "21:06", legStr(j)); // 21:06+25=21:31, +2 → 長浦21:33発
+});
+test("推定着からの乗換に est が付く", () => {
+  // 実データ：大貫14:33発（上り 2-03）→ 君津は推定着 14:45頃
+  const k = earliest(net, SI["大貫"], SI["君津"], tm("14:30"), O);
+  eq(fmt(k.arr), "14:45", legStr(k)); eq(annotate(k, O).arrEst, true);
+  // 推定着 → 別の列車 の乗換
+  const fake = { dep: 10, arr: 30, legs: [{ type: "train", dep: 10, arr: 20, arrEst: true }, { type: "train", dep: 21, arr: 30 }] };
+  const fa = annotate(fake, O);
+  eq(fa.estTransfer, true); eq(fa.transfers[0].est, true); eq(fa.transfers[0].tight, true);
+});
+test("矢印の接続は待ちが短くてもギリギリ扱いにしない", () => {
+  const j = earliest(net, SI["木更津"], SI["安房鴨川"], tm("6:40"), { margin: 5, busMin: 25 });
+  const a = annotate(j, O);
+  eq(a.tight, false); eq(a.transfers.some(t => t.linked && t.wait === 1), true);
+});
+
+/* ===== ビルド（dist/index.html） ===== */
+test("ビルド：1ファイル・<title>と<style>が先頭・禁止タグなし・外部は Google Fonts のみ", () => {
+  const html = build();
+  if (!/^<title>[^<]+<\/title>\s*<style>/.test(html)) throw new Error("先頭が <title><style> でない");
+  for (const bad of [/<!doctype/i, /<html[\s>]/i, /<head[\s>]/i, /<body[\s>]/i, /\balert\(/, /\bconfirm\(/, /window\.print/, /\bfetch\(/]) {
+    if (bad.test(html)) throw new Error(`使えないもの: ${bad}`);
+  }
+  const ext = [...html.matchAll(/(?:href|src)="(https?:[^"]+)"/g)].map(m => m[1]).filter(u => !u.startsWith("https://fonts.googleapis.com/"));
+  if (ext.length) throw new Error(ext.join(", "));
+});
+test("ビルド：スクリプトが構文エラーなし、偽の DOM 上で動く（localStorage なしでも）", () => {
+  const code = bundleScript();
+  new vm.Script(code);
+  const els = new Map();
+  const el = id => {
+    if (!els.has(id)) els.set(id, {
+      id, value: "", innerHTML: "", textContent: "", children: [], attrs: {},
+      setAttribute(k, v) { this.attrs[k] = String(v); }, addEventListener() {}, appendChild(c) { this.children.push(c); },
+    });
+    return els.get(id);
+  };
+  el("margin").value = "2"; el("busMin").value = "25"; el("from").value = "11"; el("to").value = "0";
+  const ctx = {
+    document: { getElementById: el, createElement: () => ({ appendChild() {} }) },
+    Option: function (t, v) { this.text = t; this.value = v; },
+    localStorage: { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } },
+    Date, Math, JSON, Number, String, Map, Set, Array, Object, Error, console,
+  };
+  vm.runInNewContext(code, ctx);
+  if (!el("results").innerHTML.includes("card")) throw new Error("結果が描画されない:\n" + el("results").innerHTML.slice(0, 200));
+  // 最終ボタン
+  el("last").onclick();
+  if (!el("results").innerHTML.includes("最終")) throw new Error("最終が描画されない");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

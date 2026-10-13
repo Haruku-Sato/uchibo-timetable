@@ -34,11 +34,12 @@ function busPeer(s) { return s === BUS.a ? BUS.b : s === BUS.b ? BUS.a : -1; }
 
 /**
  * 時刻 t 以降に origin を出て dest に最も早く着く経路。なければ null。
- * opts: {margin: 乗換余裕(分), busMin: バス所要(分)}
+ * opts: {margin: 乗換余裕(分), busMin: バス所要(分), busFirst/busLast: バスの始発・最終の発車時刻(分。null=指定なし)}
  * 乗換余裕は列車→列車、バス→列車の乗り継ぎにかかる。矢印の接続は余裕に関係なく乗り継げる。
+ * バスは運行時間内なら随時乗れるとみなす（始発より前に着いたら始発まで待つ。最終より後は乗れない）。
  * 戻り値: {dep, arr, legs:[{type:"train"|"bus", from, to, dep, arr, arrEst?, train?, linked?}]}
  */
-export function earliest(net, origin, dest, t, { margin = 2, busMin = BUS.defaultMin } = {}) {
+export function earliest(net, origin, dest, t, { margin = 2, busMin = BUS.defaultMin, busFirst = null, busLast = null } = {}) {
   if (origin === dest) return null;
   const N = STATIONS.length, INF = 1e9;
   const arr = Array(N).fill(INF), board = Array(N).fill(INF), label = Array(N).fill(null);
@@ -49,8 +50,10 @@ export function earliest(net, origin, dest, t, { margin = 2, busMin = BUS.defaul
   const relaxBus = (s, time, prev) => {
     const o = busPeer(s);
     if (o < 0) return;
-    const a = time + busMin;
-    if (a < arr[o]) { arr[o] = a; board[o] = a + margin; label[o] = { type: "bus", from: s, to: o, dep: time, arr: a, prev }; }
+    const dep = busFirst == null ? time : Math.max(time, busFirst);
+    if (busLast != null && dep > busLast) return;
+    const a = dep + busMin;
+    if (a < arr[o]) { arr[o] = a; board[o] = a + margin; label[o] = { type: "bus", from: s, to: o, dep, arr: a, prev }; }
   };
   const trainLabel = (r, c) => ({
     type: "train", train: c.trip, from: r.enter.from, to: c.to, dep: r.enter.dep, arr: c.arr,
@@ -125,4 +128,38 @@ export function lastJourney(net, origin, dest, opts = {}) {
     if (earliest(net, origin, dest, mid, opts)) lo = mid; else hi = mid - 1;
   }
   return earliest(net, origin, dest, lo, opts);
+}
+
+export const TIGHT_MIN = 2;          // 乗換がこの分数以下なら「ギリギリ」
+export const BUS_UNSURE_FROM = 22 * 60, BUS_UNSURE_TO = 6 * 60; // 運行時間が未指定のとき「未確認」とする時間帯
+
+/**
+ * 画面に出す注意点をまとめる。
+ * transfers[k] … legs[k] と legs[k+1] の間：{wait, tight, linked, est(到着が推定), toBus}
+ * busUnsure … 運行時間が未指定のまま、22:00以降／6:00前のバスを使っている
+ * busStart  … 最初の区間がバス（出発時刻は時刻表の発車ではなく「この時刻までに乗車」）
+ */
+export function annotate(j, { busFirst = null, busLast = null } = {}) {
+  const transfers = [];
+  for (let k = 1; k < j.legs.length; k++) {
+    const a = j.legs[k - 1], b = j.legs[k];
+    const wait = b.dep - a.arr;
+    const toBus = b.type === "bus";
+    transfers.push({
+      wait, toBus, linked: !!b.linked, est: !!a.arrEst,
+      tight: !toBus && !b.linked && wait <= TIGHT_MIN,
+    });
+  }
+  const busUnsure = j.legs.some(l => l.type === "bus" &&
+    ((busLast == null && l.dep >= BUS_UNSURE_FROM) || (busFirst == null && l.dep < BUS_UNSURE_TO)));
+  return {
+    transfers,
+    tight: transfers.some(t => t.tight),
+    estTransfer: transfers.some(t => t.est && !t.toBus),
+    busUnsure,
+    busStart: j.legs[0].type === "bus",
+    hasBus: j.legs.some(l => l.type === "bus"),
+    weekdayOnly: j.legs.some(l => l.weekdayOnly),
+    arrEst: !!j.legs.at(-1).arrEst,
+  };
 }
