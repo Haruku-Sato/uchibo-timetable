@@ -3,7 +3,12 @@
 ## 段階7：iPhone でオフラインで使える PWA 版（docs/pwa.md）
 
 ### 公開先と iPhone への入れ方
-- 公開 URL：**（未公開。push の確認待ち）** 公開後は `https://haruku-sato.github.io/uchibo-timetable/` になる予定。
+- 公開 URL：**https://haruku-sato.github.io/uchibo-timetable/**（リポジトリ：https://github.com/Haruku-Sato/uchibo-timetable 、公開）
+  - Pages の Source は `gh api` で GitHub Actions に設定した。
+  - 公開後に curl で確認した：`/`、manifest、sw.js、アイコンが 200 で正しい Content-Type。画面下の版と sw.js の版が一致（956d35cf99）。
+  - 公開する前に、コミットの作者メールを GitHub の noreply アドレスに書き換えた（ユーザーの指示）。
+    元の履歴はローカルの `refs/backup/*` にだけ残してあり、push していない。このリポジトリの `user.email` も noreply にした。
+  - GitHub の `main` は、ローカルの `feature/full-line-data` を push したもの。ローカルの `master`（初期セットアップのみ）は push していない。
 - iPhone への入れ方：
   1. Safari で上の URL を開く（最初の1回はネットが必要）。
   2. 共有ボタン →「ホーム画面に追加」→「追加」。
