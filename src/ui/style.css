@@ -167,3 +167,6 @@ svg.map .st.major text{font-weight:700;font-size:12px}
 svg.map .st.on circle{fill:var(--sel);stroke:var(--fg);stroke-width:2}
 svg.map .st.on text{font-weight:700;fill:var(--sel-ink)}
 svg.map .st:focus-visible circle{stroke:var(--fg);stroke-width:3}
+/* ===== PWA 版の小さな通知（時刻表を更新しました）とバージョン表示 ===== */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:10;background:var(--fg);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:999px;box-shadow:0 4px 14px rgb(0 0 0 / .2);max-width:calc(100% - 32px)}
+footer .ver{font-size:11px}

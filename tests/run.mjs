@@ -2,7 +2,8 @@
 import { buildModel, checkTrains, fmt, tm } from "../src/model.mjs";
 import { STATIONS, SI } from "../src/data/stations.mjs";
 import { buildNetwork, earliest, journeys, lastJourney, annotate } from "../src/search.mjs";
-import { build, bundleScript } from "../build.mjs";
+import { build, buildSite, bundleScript, ICONS } from "../build.mjs";
+import fs from "node:fs";
 import { segmentLasts, mapSvg, mapLayout, mapPath, nearestStation, textBox, FONT, MAP_PTS, MAP_SEGMENTS, MAP_VIEWBOX, SEA_LABELS } from "../src/ui/map.mjs";
 import vm from "node:vm";
 
@@ -419,6 +420,124 @@ test("ビルド：スクリプトが構文エラーなし、偽の DOM 上で動
   eq(el("mapSel").textContent, "君津 → 千葉"); // 見出しに「（上りの最終）」は付けない
   eq(el("from").value, SI["君津"]); eq(el("to").value, 0);
 });
+
+/* ===== 段階7：PWA 版（site/） ===== */
+const site = buildSite();
+const siteFile = p => new URL(`../site/${p}`, import.meta.url);
+test("site/index.html：doctype・viewport・manifest・apple-touch-icon・standalone 指定・SW 登録", () => {
+  const h = fs.readFileSync(siteFile("index.html"), "utf8");
+  if (!h.startsWith("<!doctype html>\n<html lang=\"ja\">")) throw new Error("doctype / lang");
+  for (const re of [
+    /<meta charset="utf-8">/, /<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">/,
+    /<link rel="manifest" href="manifest.webmanifest">/, /<link rel="apple-touch-icon" href="icons\/apple-touch-icon.png">/,
+    /<meta name="apple-mobile-web-app-capable" content="yes">/, /<meta name="apple-mobile-web-app-title" content="内房線">/,
+    /<meta name="theme-color" content="[^"]+" media="\(prefers-color-scheme: light\)">/, /<meta name="theme-color" content="[^"]+" media="\(prefers-color-scheme: dark\)">/,
+    /\[hidden\]\{display:none!important\}/, /safe-area-inset-top/, /body\{margin:0\}/,
+    /navigator\.serviceWorker\.register\("sw\.js"\)/, /fonts\.googleapis\.com[^"]*display=swap/,
+    new RegExp(`アプリ [0-9-]+ [0-9:]+ 版（${site.version}）`), /<\/head>\s*<body>/, /<\/html>\s*$/,
+  ]) if (!re.test(h)) throw new Error(`ない: ${re}`);
+  if (/__VERSION__|<!--APPVER-->|\/\*(STYLE|SCRIPT)\*\//.test(h)) throw new Error("置き換え漏れ");
+  // 本体は dist と同じ（版の表示だけが違う）
+  const dist = fs.readFileSync(new URL("../dist/index.html", import.meta.url), "utf8");
+  const core = dist.slice(dist.indexOf("<script>"), dist.lastIndexOf("</script>"));
+  if (!h.includes(core)) throw new Error("本体のスクリプトが dist と違う");
+  if (dist.includes("serviceWorker") || dist.includes("アプリ ")) throw new Error("dist に PWA 用のものが入っている");
+});
+test("site/manifest.webmanifest：JSON・必要な項目・実在するアイコン", () => {
+  const m = JSON.parse(fs.readFileSync(siteFile("manifest.webmanifest"), "utf8"));
+  eq(m.name, "内房線 臨時ダイヤ 乗換検索"); eq(m.short_name, "内房線"); eq(m.display, "standalone");
+  eq(m.start_url, "./"); eq(m.scope, "./");
+  if (!m.background_color || !m.theme_color) throw new Error("色がない");
+  eq(m.icons.map(i => i.sizes).join(","), "192x192,512x512");
+  for (const i of m.icons) {
+    const buf = fs.readFileSync(siteFile(i.src));
+    eq(buf.subarray(1, 4).toString(), "PNG", i.src);
+    eq(`${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}`, i.sizes, i.src); // PNG の IHDR の幅・高さ
+  }
+  const at = fs.readFileSync(siteFile("icons/apple-touch-icon.png"));
+  eq(`${at.readUInt32BE(16)}x${at.readUInt32BE(20)}`, "180x180");
+  if (!fs.existsSync(siteFile(".nojekyll"))) throw new Error(".nojekyll がない");
+});
+
+/* Service Worker を偽の環境で動かす */
+async function runSW({ online = true, slowNet = false } = {}) {
+  const code = fs.readFileSync(siteFile("sw.js"), "utf8");
+  new vm.Script(code);
+  const stores = new Map(), listeners = {}, fetched = [];
+  const keyOf = k => typeof k === "string" ? new URL(k, "https://example.github.io/uchibo-timetable/sw.js").href : k.url;
+  class Res { constructor(body, init = {}) { this.body = body; this.status = init.status ?? 200; this.ok = this.status < 300; this.type = "basic"; } clone() { return new Res(this.body, { status: this.status }); } }
+  class Req { constructor(u, init = {}) { this.url = keyOf(u); this.method = "GET"; this.mode = init.mode || "cors"; this.cache = init.cache; } }
+  const cacheObj = name => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    const m = stores.get(name);
+    return {
+      addAll: async reqs => { for (const r of reqs) m.set(keyOf(r), new Res(`net:${keyOf(r)}`)); fetched.push(...reqs.map(r => [keyOf(r), r.cache])); },
+      match: async (k, o = {}) => { const u = keyOf(k); return m.get(o.ignoreSearch ? u.split("?")[0] : u); },
+      put: async (k, r) => { m.set(keyOf(k), r); },
+    };
+  };
+  const ctx = {
+    self: { addEventListener: (t, f) => { listeners[t] = f; }, location: { origin: "https://example.github.io" }, skipWaiting: async () => {}, clients: { claim: async () => {} } },
+    caches: { open: async n => cacheObj(n), keys: async () => [...stores.keys()], delete: async n => stores.delete(n) },
+    fetch: req => {
+      fetched.push([req.url, "fetch"]);
+      if (!online) return Promise.reject(new Error("offline"));
+      return slowNet ? new Promise(() => {}) : Promise.resolve(new Res(`new:${req.url}`));
+    },
+    Request: Req, Response: Res, URL, Promise, console,
+  };
+  vm.runInNewContext(code, ctx);
+  const ev = (type, extra = {}) => { const waits = []; let responded; listeners[type]({ ...extra, waitUntil: p => waits.push(p), respondWith: p => { responded = p; } }); return { waits, responded }; };
+  return { ctx, stores, fetched, ev, Req };
+}
+const tests7 = [];
+const atest = (name, fn) => tests7.push([name, fn]);
+atest("sw.js：構文エラーなし・キャッシュ名に版・install で index などをキャッシュ（HTTP キャッシュを使わない）", async () => {
+  const sw = await runSW();
+  sw.stores.set("uchibo-old", new Map()); sw.stores.set("uchibo-fonts", new Map()); sw.stores.set("other-app", new Map());
+  const i = sw.ev("install"); await Promise.all(i.waits);
+  const name = `uchibo-${site.version}`;
+  if (!sw.stores.has(name)) throw new Error("版の入ったキャッシュがない: " + [...sw.stores.keys()]);
+  const keys = [...sw.stores.get(name).keys()].map(k => k.replace("https://example.github.io/uchibo-timetable/", ""));
+  for (const k of ["", "index.html", "manifest.webmanifest", ...ICONS.map(f => "icons/" + f)]) if (!keys.includes(k)) throw new Error(`キャッシュにない: "${k}"`);
+  if (!sw.fetched.every(([, c]) => c === "reload")) throw new Error("install で HTTP キャッシュを使っている");
+  const a = sw.ev("activate"); await Promise.all(a.waits);
+  eq([...sw.stores.keys()].sort().join(","), ["other-app", "uchibo-fonts", name].sort().join(","), "activate で古い版だけ消す");
+});
+atest("sw.js：ページはキャッシュを先に返す（ネットが遅くても待たない）、裏で取り直す", async () => {
+  const sw = await runSW({ slowNet: true });
+  const name = `uchibo-${site.version}`;
+  sw.stores.set(name, new Map([["https://example.github.io/uchibo-timetable/index.html", new sw.ctx.Response("cached")]]));
+  const f = sw.ev("fetch", { request: new sw.Req("https://example.github.io/uchibo-timetable/?from=1", { mode: "navigate" }) });
+  const res = await Promise.race([f.responded, new Promise(r => setTimeout(() => r("timeout"), 200))]);
+  eq(res?.body, "cached", "キャッシュをすぐ返す");
+  if (!sw.fetched.some(([u, k]) => k === "fetch" && u.includes("?from=1"))) throw new Error("裏でネットに取りに行っていない");
+  eq(f.waits.length, 1, "裏の取り直しを waitUntil で待つ");
+});
+atest("sw.js：キャッシュがあれば裏の取り直しでキャッシュを新しくする／圏外でキャッシュもなければ 503", async () => {
+  const sw = await runSW();
+  const name = `uchibo-${site.version}`, u = "https://example.github.io/uchibo-timetable/index.html";
+  sw.stores.set(name, new Map([[u, new sw.ctx.Response("old")]]));
+  const f = sw.ev("fetch", { request: new sw.Req(u, { mode: "navigate" }) });
+  eq((await f.responded).body, "old"); await Promise.all(f.waits);
+  eq(sw.stores.get(name).get(u).body, `new:${u}`, "次に開いたときは新しい版");
+  const off = await runSW({ online: false });
+  const g = off.ev("fetch", { request: new off.Req("https://example.github.io/uchibo-timetable/index.html", { mode: "navigate" }) });
+  eq((await g.responded).status, 503);
+});
+atest("sw.js：Google Fonts は実行時にフォント用のキャッシュへ入れる。ほかのサイトには手を出さない", async () => {
+  const sw = await runSW();
+  const u = "https://fonts.gstatic.com/s/bizudpgothic/v1/a.woff2";
+  const f = sw.ev("fetch", { request: new sw.Req(u) });
+  await f.responded; await Promise.all(f.waits);
+  eq(sw.stores.get("uchibo-fonts").has(u), true);
+  const o = sw.ev("fetch", { request: new sw.Req("https://cdnjs.cloudflare.com/x.js") });
+  eq(o.responded, undefined);
+});
+for (const [name, fn] of tests7) {
+  try { await fn(); passed++; console.log(`ok   ${name}`); }
+  catch (e) { failed++; console.log(`FAIL ${name}\n     ${String(e.message).replace(/\n/g, "\n     ")}`); }
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

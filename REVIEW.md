@@ -1,5 +1,69 @@
 # REVIEW
 
+## 段階7：iPhone でオフラインで使える PWA 版（docs/pwa.md）
+
+### 公開先と iPhone への入れ方
+- 公開 URL：**（未公開。push の確認待ち）** 公開後は `https://haruku-sato.github.io/uchibo-timetable/` になる予定。
+- iPhone への入れ方：
+  1. Safari で上の URL を開く（最初の1回はネットが必要）。
+  2. 共有ボタン →「ホーム画面に追加」→「追加」。
+  3. 以後はホーム画面の「内房線」アイコンから起動する。圏外や機内モードでも、検索と路線図が使える。
+
+### 変更点
+- `node build.mjs` で2つ作る。
+  - `dist/index.html`：アーティファクト用。今までどおりで、skeleton はない。PWA 用のもの（Service Worker の登録や版の表示）は入れない（テストあり）。
+  - `site/`：PWA 版。git には入れない（`.gitignore`）。
+    - `site/index.html`：doctype、`<html lang="ja">`、`<head>` を持つ完全な HTML。docs の meta 一式（manifest、apple-touch-icon、apple-mobile-web-app-*、ライト／ダークの theme-color）を入れた。
+      アーティファクトの skeleton が担っていた基本のスタイル（safe-area の余白、`body{margin:0}`、`[hidden]`）も自分で持つ。本体の style と script は dist と同じもの。
+    - `manifest.webmanifest`：name、short_name、standalone、`./`、色、アイコン（192・512）。
+    - `sw.js`：Service Worker（下記）。
+    - `icons/`：180・192・512 の PNG。
+    - `.nojekyll`
+- **アイコン**：内房線のバッジと同じ青（#0098d1）の地に、白で「内房」と書き、下に白い線を引いた。
+  - 元の SVG は `src/icons/icon.svg`。
+  - PNG は `tools/make-icons.sh` で作った。使ったのは **macOS 標準の `qlmanage`（Quick Look で SVG を描画）と `sips`（縮小）** で、外部のツールは入れていない。
+  - 文字はヒラギノ角ゴの太字。
+  - できた PNG は `src/icons/` にコミットし、ビルドでは `site/icons/` にコピーするだけにした。GitHub Actions（Linux）では変換しない。
+- **版**：版は「ソース（本体・SW・アイコン）の SHA-256 の先頭10桁」とした。
+  - ソースが変わらなければ版も変わらないので、`dist/` がビルドのたびに変わることはない。
+  - 画面の下に「データ：2026年10月時点・アプリ 2026-10-17 20:42 版（956d35cf99）」と出す（site だけ）。
+  - 日時は git の最新コミットの日時（日本時間）。Actions では push したコミットの日時になる。
+
+### Service Worker（`src/pwa/sw.js`）と更新の仕組み
+- **install**：`./`、`index.html`、`manifest.webmanifest`、アイコン3つを、版の入ったキャッシュ `uchibo-<版>` に入れる。
+  `cache: "reload"` を指定して、ブラウザの HTTP キャッシュを通さずネットから取る。終わったらすぐ有効にする（skipWaiting）。
+- **activate**：`uchibo-` で始まる古い版のキャッシュを消す。フォントのキャッシュ（`uchibo-fonts`）とほかのアプリのキャッシュは残す。
+- **ページと自分のファイル**：キャッシュにあれば**すぐ返す**（cache-first）。同時に裏でネットから取り直し、キャッシュを上書きする（stale-while-revalidate）。
+  取り直しは `waitUntil` で、終わるまで SW を止めない。ページの表示はクエリが付いていても `index.html` のキャッシュを使う。
+  キャッシュがなく圏外のときは、503 と「オフラインのため読み込めませんでした」を返す。
+- **Google Fonts**：fonts.googleapis.com と fonts.gstatic.com の応答を、実行時に `uchibo-fonts` にキャッシュする。
+  キャッシュがないときはシステムフォント（ヒラギノ）で表示される。`display=swap` は維持した。
+- **いつ新しい版になるか**
+  1. 時刻表やアプリを直して main に push すると、Actions が新しい版を Pages に出す（数分）。
+  2. iPhone でアプリを開くと、まずキャッシュの古い版がすぐ表示される。その裏で、ネットにつながっていれば次の2つが起きる。
+     - 新しい `index.html` がキャッシュに入る。
+     - ブラウザが `sw.js` の変化に気づき、新しい版のキャッシュを作る。古い版のキャッシュは消える。
+  3. **次に開いたとき**に新しい版で起動する。前回と版が違えば、画面の下に「時刻表を更新しました」を1回だけ小さく出す（localStorage に前回の版を覚える）。
+  - GitHub Pages は約10分の HTTP キャッシュを付けるので、push の直後は1〜2回多く開かないと反映されないことがある。
+- **テスト**：59件。追加したものは次のとおり。
+  - site/index.html の meta 一式、SW の登録、置き換え漏れがないこと。本体のスクリプトが dist と同じであること。
+  - manifest を JSON として読み、アイコンの PNG を開いて実際の幅・高さを確かめる。
+  - **Service Worker を偽の環境で動かすテスト**：
+    - install で版の名前のキャッシュに必要なものが入る。
+    - activate で古い版だけが消える。
+    - ネットが返ってこなくてもキャッシュをすぐ返す。
+    - 裏の取り直しでキャッシュが新しくなる。
+    - 圏外でキャッシュがなければ 503 を返す。
+    - フォントはフォント用のキャッシュに入る。
+  - このテストで、**版の置き換えが SW のコードに効いていない不具合**を見つけて直した。コメントにも `__VERSION__` と書いてあり、最初の1か所しか置き換えていなかった。
+- `.github/workflows/pages.yml`：main に push すると、テスト → `node build.mjs` → `site/` を Pages にアップロードして公開する。
+
+### 確認してほしい点
+- iPhone 実機でホーム画面に追加し、機内モードで起動できるか（こちらでは実機を確認できない）。
+- アイコンの見た目（`src/icons/icon-512.png`）。
+- 上部の安全領域（ノッチ）の下に、ヘッダーが正しく収まっているか。
+
+
 ## 段階6：総武線（千葉〜津田沼）・京葉線（蘇我〜海浜幕張〜新習志野）の追加（docs/extra-lines.md）
 
 ### 変更点
