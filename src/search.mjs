@@ -8,7 +8,8 @@ export const SERVICE_END = 28 * 60;   // 翌4:00（0時台は24時以降とし�
  * 検索用のネットワークを作る。dayType: "weekday"（平日）| "holiday"（土休日。平日のみの列車を除く）
  */
 export function buildNetwork(model, { dayType = "weekday" } = {}) {
-  const trains = model.trains.filter(t => dayType === "weekday" || !t.weekdayOnly);
+  // 平日のみの列車は土休日に除く。追加区間は平日／土休日で別のデータ（days）
+  const trains = model.trains.filter(t => (dayType === "weekday" || !t.weekdayOnly) && (!t.days || t.days === dayType));
   const ok = new Set(trains.map(t => t.id));
   const conns = [];
   for (const t of trains) {

@@ -2,12 +2,13 @@
 import { STATIONS, BUS } from "../data/stations.mjs";
 import { buildModel, fmt, tm } from "../model.mjs";
 import { buildNetwork, journeys, lastJourney, annotate } from "../search.mjs";
-import { segmentLasts, mapSvg, nearestStation } from "./map.mjs";
+import { segmentLasts, mapSvg, nearestStation, mapRank } from "./map.mjs";
 
 const MODEL = buildModel();
 const NETS = { weekday: buildNetwork(MODEL, { dayType: "weekday" }), holiday: buildNetwork(MODEL, { dayType: "holiday" }) };
 const STORE_KEY = "uchibo-v2";
-const GROUPS = [["千葉〜姉ヶ崎", 0, 6], ["長浦〜木更津", 7, 10], ["君津〜館山", 11, 23], ["九重〜安房鴨川", 24, 31]];
+const GROUPS = [["千葉〜姉ヶ崎", 0, 6], ["長浦〜木更津", 7, 10], ["君津〜館山", 11, 23], ["九重〜安房鴨川", 24, 31],
+  ["総武線（千葉〜）", 32, 32], ["京葉線（蘇我〜）", 33, 34]];
 
 const $ = id => document.getElementById(id);
 const fromSel = $("from"), toSel = $("to");
@@ -84,6 +85,8 @@ function busHoursStr(o) {
   if (o.busFirst == null && o.busLast == null) return "運行時間 指定なし";
   return `運行 ${o.busFirst == null ? "指定なし" : fmt(o.busFirst)}〜${o.busLast == null ? "指定なし" : fmt(o.busLast)}`;
 }
+/* 列車の区間の説明：内房線は「○○行」、追加区間は路線名（行き先は持っていない） */
+function trainName(tr) { return tr.extra ? tr.line : `内房線 ${STATIONS[tr.stops.at(-1).s]}行`; }
 function busStartText(j, o) {
   const b = j.legs[0], n = j.legs[1];
   const pre = n ? `${STATIONS[n.from]} ${fmt(n.dep)} 発に乗るには、` : "";
@@ -105,7 +108,7 @@ function render(j, i, o, tag) {
     if (isBus) info = `バス（${o.busMin}分想定・随時運行と仮定）`;
     else {
       const tr = MODEL.trains[l.train];
-      info = `内房線 ${STATIONS[tr.stops.at(-1).s]}行　${l.arr - l.dep}分${l.weekdayOnly ? "　<b>平日のみ</b>" : ""}`;
+      info = `${trainName(tr)}　${l.arrEst ? "約" : ""}${l.arr - l.dep}分${l.weekdayOnly ? "　<b>平日のみ</b>" : ""}`;
     }
     html += `<li class="seg-line${isBus ? " bus" : ""}"><span></span><span class="bar"></span><span class="info">${info}</span></li>`;
     html += `<li class="stop${isBus ? " bus" : ""}"><span class="tm">${tmHtml(l.arr, l.arrEst)}</span><span class="dot"></span><span class="nm">${STATIONS[l.to]} 着</span></li>`;
@@ -191,7 +194,7 @@ $("tabMap").onclick = () => showTab("map");
 function legLine(l, o) {
   if (l.type === "bus") return `<li class="bus">${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${fmt(l.arr)}　バス（${o.busMin}分想定）</li>`;
   const tr = MODEL.trains[l.train];
-  return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${STATIONS[tr.stops.at(-1).s]}行${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
+  return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${tr.extra ? tr.line : `${STATIONS[tr.stops.at(-1).s]}行`}${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
 }
 function renderMapResult(o) {
   const { a, b } = mapState;
@@ -249,7 +252,7 @@ function tapStation(i) {
   const m = mapState;
   if (m.a == null || m.b != null) { m.a = i; m.b = null; }
   else if (i === m.a) m.a = null;
-  else { m.b = i; m.dir = i > m.a ? "down" : "up"; fromSel.value = m.a; toSel.value = m.b; }
+  else { m.b = i; m.dir = mapRank(i) > mapRank(m.a) ? "down" : "up"; fromSel.value = m.a; toSel.value = m.b; }
   run();
 }
 function setDir(d) {

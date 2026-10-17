@@ -1,6 +1,7 @@
 /* ===== 時刻表データ → 列車リスト ===== */
 import { STATIONS, SI } from "./data/stations.mjs";
 import { TABLES } from "./data/timetable.mjs";
+import { EXTRA } from "./data/extra.mjs";
 
 /* "H:MM" → 分。0〜3時台は24時以降として扱う。画像の誤字「;」も「:」として読む。 */
 export function tm(s) {
@@ -46,12 +47,13 @@ function splitColumn(cells, problems, where) {
 /**
  * 全時刻表を読み込み、列車とリンク（矢印の接続）を返す。
  * train: {id, table, col, dir, weekdayOnly, stops:[{s, arr, dep, arrGiven, arrEst?}]}
+ *   追加区間（総武線・京葉線）の列車は extra: true、line（路線名）、days（"weekday"|"holiday"）を持ち、着はすべて推定（arrEst）
  *   arr = その駅に着く時刻、dep = その駅を出る時刻（始発駅の arr / 終着駅の dep は同じ値）
  *   arrGiven = 時刻表に「着」がある、arrEst = 着時刻を推定した（画面では「頃」を付ける）
  * link:  {at, fromTrain, toTrain, arr, dep}  … 乗換余裕に関係なく必ず乗り継げる
  * problems: データの書式上の問題（空なら OK）
  */
-export function buildModel(tables = TABLES) {
+export function buildModel(tables = TABLES, extra = EXTRA) {
   const trains = [], links = [], problems = [];
   for (const tb of tables) {
     const rows = tb.rows.map(parseRow);
@@ -100,13 +102,50 @@ export function buildModel(tables = TABLES) {
     }
   }
   estimateArrivals(trains);
+  buildExtraTrains(extra, trains, problems);
   return { trains, links, problems };
+}
+
+/* 追加区間：発車時刻の表（"時: 分 分記号 …"）から、発車時刻＋所要で列車を作る */
+function buildExtraTrains(extra, trains, problems) {
+  for (const tb of extra) {
+    if (!(tb.from in SI)) { problems.push(`${tb.title}: 未知の駅 ${tb.from}`); continue; }
+    let prevHour = -1;
+    for (const line of tb.times.trim().split("\n")) {
+      const m = line.match(/^(\d{1,2}):\s+(.+)$/);
+      if (!m) { problems.push(`${tb.title}: 読めない行 "${line}"`); continue; }
+      const h = Number(m[1]), hh = h < 4 ? h + 24 : h;
+      if (hh <= prevHour) problems.push(`${tb.title}: ${h}時の行の順番がおかしい`);
+      prevHour = hh;
+      let prevMin = -1;
+      for (const tok of m[2].trim().split(/\s+/)) {
+        const t = tok.match(/^(\d{2})(\D*)$/);
+        const route = t && tb.routes[t[2]];
+        if (!t || !route) { problems.push(`${tb.title} ${h}時: 読めない "${tok}"`); continue; }
+        const mm = Number(t[1]);
+        if (mm > 59 || mm < prevMin) problems.push(`${tb.title} ${h}時: 分の並びがおかしい "${tok}"`);
+        prevMin = mm;
+        const dep = hh * 60 + mm;
+        const stops = [{ s: SI[tb.from], arr: dep, dep, arrGiven: false }];
+        for (const [name, run] of route.stops) {
+          if (!(name in SI)) { problems.push(`${tb.title}: 未知の駅 ${name}`); continue; }
+          const a = dep + run;
+          stops.push({ s: SI[name], arr: a, dep: a, arrGiven: false, arrEst: true });
+        }
+        trains.push({
+          id: trains.length, table: tb.id, col: `${h}:${t[1]}${t[2]}`, dir: "extra", extra: true,
+          line: route.line, days: tb.days, weekdayOnly: false, stops,
+        });
+      }
+    }
+  }
 }
 
 /* 隣り合う駅間（方向つき）の最短所要：全列車での「次駅の着（なければ発）− 前駅の発」の最小値 */
 export function minRunTimes(trains) {
   const best = new Map();
   for (const t of trains) {
+    if (t.extra) continue;
     for (let k = 1; k < t.stops.length; k++) {
       const pv = t.stops[k - 1], st = t.stops[k];
       const key = pv.s + "-" + st.s;
@@ -122,6 +161,7 @@ export function minRunTimes(trains) {
 function estimateArrivals(trains) {
   const best = minRunTimes(trains);
   for (const t of trains) {
+    if (t.extra) continue;
     for (let k = 1; k < t.stops.length; k++) {
       const pv = t.stops[k - 1], st = t.stops[k];
       if (st.arrGiven) continue;
@@ -142,7 +182,7 @@ export function checkTrains(trains) {
       if (k === 0) continue;
       const pv = t.stops[k - 1];
       const step = st.s - pv.s;
-      if (t.dir === "down" ? step <= 0 : step >= 0) out.push(`${where}: ${STATIONS[pv.s]}→${STATIONS[st.s]} の駅順が${t.dir === "down" ? "下り" : "上り"}と逆`);
+      if (!t.extra && (t.dir === "down" ? step <= 0 : step >= 0)) out.push(`${where}: ${STATIONS[pv.s]}→${STATIONS[st.s]} の駅順が${t.dir === "down" ? "下り" : "上り"}と逆`);
       if (st.arr <= pv.dep) out.push(`${where}: ${STATIONS[pv.s]} 発${fmt(pv.dep)} → ${STATIONS[st.s]} ${fmt(st.arr)} が単調増加でない`);
     }
   }

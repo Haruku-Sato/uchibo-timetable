@@ -6,7 +6,7 @@
   --accent:#0098d1; --accent-ink:#ffffff; --accent-soft:#e2f3fa;
   --bus:#b86808; --bus-soft:#fcefdc; --warn:#c2361f; --warn-soft:#fbe6e2;
   --est:#6b5bb5; --est-soft:#ece9f8; --ok:#1f7a4d; --ok-soft:#e0f3e8;
-  --sea:#dcecf5; --sea-ink:#6f93a8; --land:#f4f1e6; --coast:#c9c2a8; --sel:#f2b705; --sel-ink:#7a4f00; --bus-ink:#a85c00;
+  --sea:#dcecf5; --sea-ink:#6f93a8; --land:#f4f1e6; --coast:#c9c2a8; --sel:#f2b705; --sel-ink:#7a4f00; --bus-ink:#a85c00; --sobu:#8a96a0; --keiyo:#c8424e;
   --f-text:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
   --f-time:"Barlow Condensed","BIZ UDPGothic",system-ui,sans-serif;
 }
@@ -15,13 +15,13 @@
   --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
   --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
   --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326;
-  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; --bus-ink:#ffb866; color-scheme:dark}}
+  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; --bus-ink:#ffb866; --sobu:#9aa7b1; --keiyo:#f0727c; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f171c; --surface:#17232a; --fg:#e4edf2; --muted:#93a6b1; --line:#2a3a43;
   --accent:#35b6e6; --accent-ink:#06202b; --accent-soft:#163543;
   --bus:#f0a24a; --bus-soft:#3a2a15; --warn:#ff7d66; --warn-soft:#3d1f1a;
   --est:#b3a6f0; --est-soft:#2a2545; --ok:#6fd39e; --ok-soft:#173326;
-  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; --bus-ink:#ffb866; color-scheme:dark}
+  --sea:#0d2230; --sea-ink:#4f7287; --land:#1c2a24; --coast:#2f4339; --sel:#f2c94c; --sel-ink:#f2c94c; --bus-ink:#ffb866; --sobu:#9aa7b1; --keiyo:#f0727c; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-text);font-size:15px;line-height:1.55}
 .wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:16px}
@@ -138,12 +138,20 @@ footer p{margin:0}
 .map-legs .wait{display:block;min-height:0;font-size:12px}
 .map-actions{display:flex;gap:8px;flex-wrap:wrap}
 .map-hint{font-size:12px;color:var(--muted);margin:0}
+.legend{font-size:12px;color:var(--muted);margin:-8px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+.lg{display:inline-block;width:18px;height:0;border-top:3px solid var(--accent);margin-left:4px}
+.lg.bus{border-top:3px dashed var(--bus)}
+.lg.sobu{border-top-color:var(--sobu)}
+.lg.keiyo{border-top-color:var(--keiyo)}
 .map-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 svg.map{display:block;width:100%;height:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
 svg.map .sea{fill:var(--sea)}
 svg.map .land{fill:var(--land);stroke:var(--coast);stroke-width:1}
 svg.map .sea-name{fill:var(--sea-ink);font-size:12px;letter-spacing:.3em}
 svg.map .rail{fill:none;stroke:var(--accent);stroke-width:4;stroke-linejoin:round;stroke-linecap:round}
+svg.map .branch{fill:none;stroke-width:2.5;stroke-linecap:round}
+svg.map .branch.sobu{stroke:var(--sobu)}
+svg.map .branch.keiyo{stroke:var(--keiyo)}
 svg.map .bus-line{fill:none;stroke:var(--bus);stroke-width:3;stroke-dasharray:5 5;stroke-linecap:round}
 svg.map .sel-line{fill:none;stroke:var(--sel);stroke-width:9;stroke-linejoin:round;stroke-linecap:round;opacity:.85}
 svg.map .sel-line.bus{stroke-width:7;stroke-dasharray:6 6;stroke-linecap:butt;opacity:1}
@@ -184,6 +192,7 @@ svg.map .st:focus-visible circle{stroke:var(--fg);stroke-width:3}
       <div id="mapResult" aria-live="polite"></div>
     </div>
     <p class="map-hint" id="mapHint"></p>
+    <p class="legend" aria-hidden="true"><span class="lg rail"></span>内房線（臨時ダイヤ）<span class="lg bus"></span>バス<span class="lg sobu"></span>総武線<span class="lg keiyo"></span>京葉線</p>
     <div class="map-box" id="mapBox"></div>
   </section>
 
@@ -246,6 +255,7 @@ svg.map .st:focus-visible circle{stroke:var(--fg);stroke-width:3}
     <p>時刻表：JR東日本千葉事業本部 臨時ダイヤ（千葉〜姉ヶ崎 9/25〜、長浦〜安房鴨川 10/5〜）。長浦〜木更津と木更津〜安房鴨川は全列車が木更津で乗り換えです。</p>
     <p>姉ヶ崎〜長浦は列車がなくバス代行です。バスは設定の所要時間（待ち時間込み）で、運行時間内なら随時乗れるものとして計算しています。実際のバスの時刻は反映していません。</p>
     <p>時刻表に「着」がない駅は、長く停車する場合だけ到着時刻を推定しています（「頃」と表示）。推定した到着からの乗換は、実際にはもっと短いかもしれません。</p>
+    <p>千葉〜津田沼（総武線）・蘇我〜新習志野（京葉線）は通常ダイヤ（JR東日本 2026年10月の時刻表）。着時刻は代表的な所要時間からの推定です。特急は含みません。</p>
     <p>電力設備の影響で遅れが出ることがあります。乗換が2分以下の便は余裕を見てください。</p>
   </footer>
 </div>
@@ -259,7 +269,11 @@ const STATIONS = [
   "長浦", "袖ケ浦", "巌根", "木更津", "君津", "青堀", "大貫", "佐貫町", "上総湊",
   "竹岡", "浜金谷", "保田", "安房勝山", "岩井", "富浦", "那古船形", "館山",
   "九重", "千倉", "千歳", "南三原", "和田浦", "江見", "太海", "安房鴨川",
+  // 段階6で追加（通常ダイヤ）：総武線・京葉線。内房線の駅順とは関係ないので末尾に置く
+  "津田沼", "海浜幕張", "新習志野",
 ];
+/* 内房線（千葉〜安房鴨川）の駅数。0〜UCHIBO_N-1 が内房線、それ以降が追加区間の駅 */
+const UCHIBO_N = 32;
 const SI = Object.fromEntries(STATIONS.map((n, i) => [n, i]));
 
 /* 姉ヶ崎〜長浦は列車なし（バス代行） */
@@ -570,8 +584,463 @@ const TABLES = [
   },
 ];
 
+/* ---- src/data/extra.mjs ---- */
+/* ===== 追加区間（段階6）：総武線 千葉〜津田沼、京葉線 蘇我〜海浜幕張〜新習志野 =====
+ * 通常ダイヤ。JR東日本の公式時刻表（2026年10月版）の「駅の発車時刻」を docs/extra-lines.md から機械的に取り込んだ。
+ * 列車ごとの途中駅の時刻はないので、着時刻は「発車時刻＋代表的な所要（分）」で作る（推定。画面では「頃」）。
+ *   times … "時: 分 分 …"。分の後ろの記号で routes を選ぶ（無印は ""）。特急は入っていない。
+ *   routes[記号] … {line: 路線名, stops: [[駅名, 発車駅からの所要分], …]}
+ *   days … "weekday"（平日）| "holiday"（土休日）
+ */
+const EXTRA = [
+  {
+    id: "sobu-local-west-wk", title: "総武線 千葉→津田沼 各駅停車（平日）", from: "千葉", days: "weekday",
+    routes: { "": { line: "総武線各駅停車", stops: [["津田沼", 16]] } },
+    times: `
+4: 28 44
+5: 05 23 33 43 56
+6: 06 15 22 29 34 39 43 48 55
+7: 00 04 07 13 18 22 27 31 35 39 44 51 58
+8: 04 10 15 22 31 42 51
+9: 00 11 21 28 35 42 48 57
+10: 06 15 24 30 36 42 48 59
+11: 10 21 32 43 54
+12: 05 16 27 37 48 59
+13: 10 21 32 43 54
+14: 05 16 27 37 48 59
+15: 10 21 32 43 55
+16: 06 17 27 37 46 55
+17: 04 12 20 30 41 51
+18: 01 07 13 18 24 32 40 47 55
+19: 04 10 19 25 30 38 44 49 55
+20: 04 10 16 25 33 42 50 57
+21: 03 09 19 28 35 41 48 55
+22: 06 15 23 30 37 44 52
+23: 05 14 22 31 41
+0: 00 14 30
+`,
+  },
+  {
+    id: "sobu-local-west-hol", title: "総武線 千葉→津田沼 各駅停車（土休日）", from: "千葉", days: "holiday",
+    routes: { "": { line: "総武線各駅停車", stops: [["津田沼", 16]] } },
+    times: `
+4: 28 44
+5: 05 18 33 52
+6: 05 20 33 41 50 58
+7: 04 09 19 29 39 44 53
+8: 00 07 17 27 37 47 57
+9: 07 17 27 37 47 57
+10: 07 17 27 37 47 57
+11: 07 17 27 37 47 57
+12: 07 17 27 37 47 57
+13: 07 17 27 37 47 57
+14: 07 17 27 37 47 57
+15: 07 17 27 37 47 57
+16: 07 17 27 37 47 57
+17: 07 17 27 37 47 57
+18: 07 17 27 37 47 57
+19: 07 17 27 37 48 59
+20: 11 23 34 42 50
+21: 02 15 24 33 47 57
+22: 06 15 24 33 43 53
+23: 03 13 22 31 41
+0: 00 14 30
+`,
+  },
+  {
+    id: "sobu-rapid-west-wk", title: "総武線 千葉→津田沼 快速（平日）", from: "千葉", days: "weekday",
+    routes: { "": { line: "総武線快速", stops: [["津田沼", 10]] } },
+    times: `
+4: 45
+5: 06 35 53
+6: 14 21 26 32 40 47 51 57
+7: 01 10 14 17 23 27 31 36 43 46 51 56
+8: 03 09 17 25 35 46 56
+9: 07 22 31 36 44 54
+10: 03 12 26 41 52
+11: 02 12 26 41 52
+12: 02 12 26 41 52
+13: 02 12 26 41 52
+14: 02 12 26 41 52
+15: 02 12 26 41 52
+16: 02 13 24 33 45
+17: 00 08 14 22 34 45 59
+18: 12 22 30 38 45 54
+19: 01 10 15 25 31 40 51 59
+20: 07 14 24 33 43 49 57
+21: 06 16 24 29 39 49 57
+22: 05 22 33 43 55
+23: 03 11 27 50 56
+0: 15
+`,
+  },
+  {
+    id: "sobu-rapid-west-hol", title: "総武線 千葉→津田沼 快速（土休日）", from: "千葉", days: "holiday",
+    routes: { "": { line: "総武線快速", stops: [["津田沼", 10]] } },
+    times: `
+4: 45
+5: 06 37 53
+6: 14 24 33 42 51 57
+7: 02 07 14 18 23 30 36 42 46 51 57
+8: 03 09 17 25 35 46 56
+9: 09 19 25 33 43 54
+10: 08 14 27 41 52 57
+11: 02 12 26 41 52
+12: 02 12 26 41 52
+13: 02 12 26 41 52
+14: 02 12 26 41 52
+15: 02 12 26 41 52
+16: 02 12 23 33 44 58
+17: 09 22 33 45
+18: 00 13 22 30 36 45 54
+19: 03 15 25 33 39 50
+20: 05 14 25 35 44 53
+21: 01 16 24 36 39 50
+22: 03 22 39 54
+23: 03 11 27 50 56
+0: 15
+`,
+  },
+  {
+    id: "sobu-local-east-wk", title: "総武線 津田沼→千葉 各駅停車（平日）", from: "津田沼", days: "weekday",
+    routes: { "": { line: "総武線各駅停車", stops: [["千葉", 16]] } },
+    times: `
+4: 43 54
+5: 07 17 31 40 50 58
+6: 06 12 17 22 26 32 38 44 48 54 58
+7: 02 07 10 15 19 23 28 33 38 46 54
+8: 02 09 17 26 35 44 55
+9: 03 11 19 26 35 42 49 57
+10: 04 12 20 26 37 48 59
+11: 10 20 31 42 53
+12: 04 15 26 37 48 59
+13: 10 21 32 43 54
+14: 05 16 27 38 49 59
+15: 10 21 32 44 55
+16: 05 11 22 32 42 47 57
+17: 07 17 25 34 42 50 56
+18: 02 10 16 21 31 41 47 52
+19: 01 09 12 22 27 33 42 47 53 59
+20: 07 16 25 35 41 47 57
+21: 03 10 16 23 32 38 47 56
+22: 05 11 21 28 37 44 56
+23: 04 17 30 48
+0: 05 27 45
+`,
+  },
+  {
+    id: "sobu-local-east-hol", title: "総武線 津田沼→千葉 各駅停車（土休日）", from: "津田沼", days: "holiday",
+    routes: { "": { line: "総武線各駅停車", stops: [["千葉", 16]] } },
+    times: `
+4: 43 54
+5: 08 31 41 57
+6: 11 17 26 34 41 47 55
+7: 05 14 23 32 37 43 53
+8: 00 07 17 27 38 48 58
+9: 08 18 28 39 50
+10: 01 11 21 31 41 51
+11: 01 11 21 31 41 51
+12: 01 11 21 31 41 51
+13: 01 11 21 31 41 51
+14: 01 11 21 31 41 51
+15: 01 11 21 31 41 51
+16: 01 11 21 31 41 51
+17: 01 11 21 31 41 51
+18: 01 11 21 31 41 51
+19: 01 11 21 31 41 51
+20: 01 12 23 34 45 55
+21: 05 16 27 38 48 59
+22: 10 21 28 37 44 55
+23: 03 15 30 48
+0: 08 27 45
+`,
+  },
+  {
+    id: "sobu-rapid-east-wk", title: "総武線 津田沼→千葉 快速（平日）", from: "津田沼", days: "weekday",
+    routes: { "": { line: "総武線快速", stops: [["千葉", 11]] } },
+    times: `
+5: 09 31 48 59
+6: 04 09 12 22 25 40 46
+7: 03 24 38 44
+8: 05 16 26 31 37 44 55
+9: 00 07 14 25 33 42 53
+10: 05 13 25 36 44 58
+11: 13 25 34 44 54
+12: 09 25 34 44 54
+13: 09 25 34 44 54
+14: 09 25 34 44 54
+15: 09 25 34 44 55
+16: 05 12 26 34 43 55
+17: 04 14 26 38 42 53
+18: 05 13 22 27 34 38 45 54 58
+19: 04 13 23 29 38 44 55
+20: 02 11 16 21 29 36 46 51 56
+21: 04 13 21 28 35 39 48 52 58
+22: 07 15 26 36 44 49
+23: 06 16 25 34 44 53
+0: 07 29
+`,
+  },
+  {
+    id: "sobu-rapid-east-hol", title: "総武線 津田沼→千葉 快速（土休日）", from: "津田沼", days: "holiday",
+    routes: { "": { line: "総武線快速", stops: [["千葉", 11]] } },
+    times: `
+5: 09 31 48 59
+6: 04 09 14 26 39 40
+7: 03 23 38 44
+8: 05 14 29 32 39 53 57
+9: 00 02 13 25 33 43 54
+10: 03 14 25 36 44 51 58
+11: 10 25 34 44 55
+12: 09 25 34 44 55
+13: 09 25 34 44 56
+14: 09 25 34 44 55
+15: 09 25 34 44 56
+16: 04 13 26 34 42 56
+17: 05 15 26 35 45 55
+18: 06 14 23 27 35 44 56
+19: 03 12 27 37 45 54
+20: 03 17 29 34 37 47 58
+21: 09 18 28 37 51 59
+22: 08 17 26 36 44 55
+23: 09 23 33 43 53
+0: 07 29
+`,
+  },
+  {
+    id: "keiyo-soga-up-wk", title: "京葉線 蘇我→海浜幕張・新習志野（平日）", from: "蘇我", days: "weekday",
+    routes: {
+      "": { line: "京葉線", stops: [["海浜幕張", 13], ["新習志野", 17]] },
+      "快": { line: "京葉線快速", stops: [["海浜幕張", 11]] }, // 快速は新習志野を通過するので海浜幕張まで
+    },
+    times: `
+4: 50
+5: 07 27 41 50
+6: 04 11 18 27 36 43快 51快 56
+7: 01 10快 13 18 22 31 37 44 49 52 56快
+8: 02 05 13 22 32 42 46 51 59
+9: 08 13 24 36快 40 51
+10: 05 20快 35 50快
+11: 05 20快 35 50快
+12: 05 20快 35 50快
+13: 05 20快 35 50快
+14: 05 20快 35 50快
+15: 05 20快 35 50快
+16: 05 13 19 33 46 53
+17: 08 15 25 37 49 58
+18: 07 17 33 41 51
+19: 01 12 23 38 45
+20: 04 13 20 29 39 48 54
+21: 04 16 25 39 49 56
+22: 08 18 35 42 51 58
+23: 09 28 43 49
+0: 01 20
+`,
+  },
+  {
+    id: "keiyo-soga-up-hol", title: "京葉線 蘇我→海浜幕張・新習志野（土休日）", from: "蘇我", days: "holiday",
+    routes: {
+      "": { line: "京葉線", stops: [["海浜幕張", 13], ["新習志野", 17]] },
+      "快": { line: "京葉線快速", stops: [["海浜幕張", 11]] }, // 快速は新習志野を通過するので海浜幕張まで
+    },
+    times: `
+4: 50
+5: 06 26 40 54
+6: 06 18 27 33 43快 51快 56
+7: 05 10快 19 28 37 44 51 56快
+8: 05 18 27 33 40 48 54
+9: 08快 17 26 33 39快 51
+10: 07 20快 35快 50快
+11: 05快 20快 35快 50快
+12: 05快 20快 35快 50快
+13: 05快 20快 35快 50快
+14: 05快 20快 35快 50快
+15: 05快 20快 35快 50快
+16: 05 19 28快 35 47快
+17: 02 10 20 30 39 48
+18: 00 12 17 24 39 55
+19: 11 24 33 46 56
+20: 10 13 20 32 46 54 58
+21: 08 20 29 34 45 57
+22: 08 24 35 51
+23: 09 27 40 49
+0: 01 20
+`,
+  },
+  {
+    id: "keiyo-makuhari-up-wk", title: "京葉線 海浜幕張→新習志野（普通）（平日）", from: "海浜幕張", days: "weekday",
+    routes: { "": { line: "京葉線", stops: [["新習志野", 4]] } },
+    times: `
+5: 02 20 39 54
+6: 02 16 23 34 42 48 58
+7: 10 15 17 26 31 38 41 44 50 56 59
+8: 02 05 12 15 21 25 28 30 38 41 45 52 55 58
+9: 00 04 12 17 21 25 27 37 50 52 56
+10: 04 18 36 47
+11: 05 08 18 37 47
+12: 05 18 36 47
+13: 05 18 37 47
+14: 05 18 37 47
+15: 05 18 37 47
+16: 05 12 18 25 32 36 45 48 52 59
+17: 03 06 13 16 22 28 30 37 40 50 53 57
+18: 01 08 11 20 23 29 35 46 53 57
+19: 03 07 14 25 28 37 46 50 57
+20: 12 17 21 25 28 33 42 44 52
+21: 01 06 09 17 20 29 33 37 51 58
+22: 02 08 20 31 48 55
+23: 03 11 22 41 56
+0: 01 13 32
+`,
+  },
+  {
+    id: "keiyo-makuhari-up-hol", title: "京葉線 海浜幕張→新習志野（普通）（土休日）", from: "海浜幕張", days: "holiday",
+    routes: { "": { line: "京葉線", stops: [["新習志野", 4]] } },
+    times: `
+5: 02 19 38 53
+6: 06 19 31 39 46 58
+7: 08 18 28 32 37 40 50 57
+8: 00 04 17 21 24 32 39 46 52 55
+9: 02 06 12 23 26 30 38 41 45
+10: 00 04 14 19 35 42 49
+11: 04 20 34 49
+12: 04 20 34 49
+13: 04 20 35 49
+14: 04 20 34 49
+15: 04 20 35 49
+16: 06 14 18 32 48 52
+17: 01 04 15 18 22 27 33 42 46 52
+18: 00 05 09 17 24 30 37 44 51 58
+19: 07 11 23 36 45 50
+20: 00 09 20 23 28 32 35 44 49 59
+21: 08 13 17 20 33 43 49 57
+22: 09 21 36 48
+23: 04 22 40 52
+0: 01 13 32
+`,
+  },
+  {
+    id: "keiyo-narashino-down-wk", title: "京葉線 新習志野→海浜幕張・蘇我（平日）", from: "新習志野", days: "weekday",
+    // 10:40幕 は武蔵野線直通「しもうさ号」海浜幕張行（docs で「入れてよい」とされているので追加）
+    routes: {
+      "": { line: "京葉線", stops: [["海浜幕張", 5], ["蘇我", 17]] },
+      "幕": { line: "京葉線", stops: [["海浜幕張", 5]] }, // 海浜幕張止まり
+    },
+    times: `
+5: 05 16 28 34 43 55
+6: 05 09 23 34 37幕 43 55 59幕
+7: 07 15 22 28幕 31 42 46幕 49 57幕
+8: 02 09 11幕 16 19幕 24 27 30幕 39 41幕 45 47幕 50 58
+9: 01幕 04幕 08 14幕 16 26 34幕 37幕 43 53
+10: 02幕 11 27幕 40幕 43 55幕
+11: 13 27幕 43 55幕
+12: 13 25幕 43 55幕
+13: 13 25幕 43 55幕
+14: 13 26幕 43 55幕
+15: 13 26幕 43 53幕 56幕
+16: 13 18幕 25幕 42 47幕 53
+17: 02 07 14幕 17 30幕 32幕 35 41 46幕 53 56幕
+18: 00 08 13幕 16 25幕 27 32 36 46幕 48 51幕 59
+19: 05 10幕 13 19 31 35幕 39 44幕 49 55幕 58幕
+20: 02 07 12幕 16 27 30幕 38 46幕 49 58幕
+21: 01 15 17幕 29 33幕 37 54
+22: 00 11 17 28幕 35 45 52
+23: 04 14 27 36 49
+0: 03 21 39
+`,
+  },
+  {
+    id: "keiyo-narashino-down-hol", title: "京葉線 新習志野→海浜幕張・蘇我（土休日）", from: "新習志野", days: "holiday",
+    routes: {
+      "": { line: "京葉線", stops: [["海浜幕張", 5], ["蘇我", 17]] },
+      "幕": { line: "京葉線", stops: [["海浜幕張", 5]] }, // 海浜幕張止まり
+    },
+    times: `
+5: 03 16 28 43 52
+6: 03 08 22 39 46幕 58
+7: 13 18幕 22幕 29 41 45幕 49 58幕
+8: 01 08 11幕 18 25 32 39 43幕 46 53 58幕
+9: 02 06幕 10幕 13 22 25幕 36 44幕 51
+10: 02幕 05幕 13 18幕 35幕 49幕
+11: 04幕 22幕 35幕 50幕
+12: 04幕 21幕 35幕 50幕
+13: 04幕 19幕 35幕 50幕
+14: 04幕 22幕 35幕 50幕
+15: 04幕 20幕 35幕 51幕
+16: 04幕 18幕 31 35幕 42幕 50 54幕
+17: 02 07幕 09幕 23 27幕 31 37幕 44 47幕 52
+18: 05 13 23 27 30幕 34 40幕 43 52 56幕
+19: 01 10 15 25 31 40幕 46 56
+20: 00幕 04 10幕 10 18 23幕 28幕 40 49幕 54
+21: 14 24 31幕 39 58
+22: 04 16 35 51
+23: 00 14 27 37 49
+0: 03 20 39
+`,
+  },
+  {
+    id: "keiyo-makuhari-down-wk", title: "京葉線 海浜幕張→蘇我（平日）", from: "海浜幕張", days: "weekday",
+    routes: {
+      "": { line: "京葉線", stops: [["蘇我", 12]] },
+      "快": { line: "京葉線快速", stops: [["蘇我", 10]] },
+    },
+    times: `
+5: 09 20 32 39 48
+6: 00 10 15 28 39 48 59
+7: 13 19 27 36 47 55
+8: 07 13 21 28 33 44 50 55
+9: 03 13 21 32快 36 48 58
+10: 08快 15 34快 48
+11: 03快 18 33快 48
+12: 03快 18 33快 48
+13: 03快 18 33快 48
+14: 03快 18 33快 48
+15: 03快 18 33快 48
+16: 03快 18 31快 46 58
+17: 06 12 26 40 46 58
+18: 05 13 25 32 38 43 53
+19: 05 11 19 28 35 44 57
+20: 07 14 21 32 40快 43 58
+21: 06 09快 19 34 42 50快 58
+22: 05 16 25 40 49 57
+23: 09 18 32 41 54
+0: 07 25 44
+`,
+  },
+  {
+    id: "keiyo-makuhari-down-hol", title: "京葉線 海浜幕張→蘇我（土休日）", from: "海浜幕張", days: "holiday",
+    routes: {
+      "": { line: "京葉線", stops: [["蘇我", 12]] },
+      "快": { line: "京葉線快速", stops: [["蘇我", 10]] },
+    },
+    times: `
+5: 07 20 32 48 57
+6: 08 12 26 43
+7: 00快 02 19 34 46 55
+8: 05 13 23 30 37 44 51 58
+9: 07 18 27 33快 41 55
+10: 03快 17 33快 48快
+11: 03快 18快 33快 48快
+12: 03快 18快 33快 48快
+13: 03快 18快 33快 48快
+14: 03快 18快 33快 48快
+15: 03快 18快 33快 49快
+16: 04快 18快 35 48快 55
+17: 06 17快 29 36 48 57
+18: 09 18 28 32 39 48 57
+19: 08 15 20 30 36 50
+20: 01 09 14 22 38快 47 59
+21: 09快 19 29 43 51快
+22: 02 09 21 40 56
+23: 05 19 32 42 54
+0: 07 25 44
+`,
+  },
+];
+
 /* ---- src/model.mjs ---- */
 /* ===== 時刻表データ → 列車リスト ===== */
+
 
 
 /* "H:MM" → 分。0〜3時台は24時以降として扱う。画像の誤字「;」も「:」として読む。 */
@@ -618,12 +1087,13 @@ function splitColumn(cells, problems, where) {
 /**
  * 全時刻表を読み込み、列車とリンク（矢印の接続）を返す。
  * train: {id, table, col, dir, weekdayOnly, stops:[{s, arr, dep, arrGiven, arrEst?}]}
+ *   追加区間（総武線・京葉線）の列車は extra: true、line（路線名）、days（"weekday"|"holiday"）を持ち、着はすべて推定（arrEst）
  *   arr = その駅に着く時刻、dep = その駅を出る時刻（始発駅の arr / 終着駅の dep は同じ値）
  *   arrGiven = 時刻表に「着」がある、arrEst = 着時刻を推定した（画面では「頃」を付ける）
  * link:  {at, fromTrain, toTrain, arr, dep}  … 乗換余裕に関係なく必ず乗り継げる
  * problems: データの書式上の問題（空なら OK）
  */
-function buildModel(tables = TABLES) {
+function buildModel(tables = TABLES, extra = EXTRA) {
   const trains = [], links = [], problems = [];
   for (const tb of tables) {
     const rows = tb.rows.map(parseRow);
@@ -672,13 +1142,50 @@ function buildModel(tables = TABLES) {
     }
   }
   estimateArrivals(trains);
+  buildExtraTrains(extra, trains, problems);
   return { trains, links, problems };
+}
+
+/* 追加区間：発車時刻の表（"時: 分 分記号 …"）から、発車時刻＋所要で列車を作る */
+function buildExtraTrains(extra, trains, problems) {
+  for (const tb of extra) {
+    if (!(tb.from in SI)) { problems.push(`${tb.title}: 未知の駅 ${tb.from}`); continue; }
+    let prevHour = -1;
+    for (const line of tb.times.trim().split("\n")) {
+      const m = line.match(/^(\d{1,2}):\s+(.+)$/);
+      if (!m) { problems.push(`${tb.title}: 読めない行 "${line}"`); continue; }
+      const h = Number(m[1]), hh = h < 4 ? h + 24 : h;
+      if (hh <= prevHour) problems.push(`${tb.title}: ${h}時の行の順番がおかしい`);
+      prevHour = hh;
+      let prevMin = -1;
+      for (const tok of m[2].trim().split(/\s+/)) {
+        const t = tok.match(/^(\d{2})(\D*)$/);
+        const route = t && tb.routes[t[2]];
+        if (!t || !route) { problems.push(`${tb.title} ${h}時: 読めない "${tok}"`); continue; }
+        const mm = Number(t[1]);
+        if (mm > 59 || mm < prevMin) problems.push(`${tb.title} ${h}時: 分の並びがおかしい "${tok}"`);
+        prevMin = mm;
+        const dep = hh * 60 + mm;
+        const stops = [{ s: SI[tb.from], arr: dep, dep, arrGiven: false }];
+        for (const [name, run] of route.stops) {
+          if (!(name in SI)) { problems.push(`${tb.title}: 未知の駅 ${name}`); continue; }
+          const a = dep + run;
+          stops.push({ s: SI[name], arr: a, dep: a, arrGiven: false, arrEst: true });
+        }
+        trains.push({
+          id: trains.length, table: tb.id, col: `${h}:${t[1]}${t[2]}`, dir: "extra", extra: true,
+          line: route.line, days: tb.days, weekdayOnly: false, stops,
+        });
+      }
+    }
+  }
 }
 
 /* 隣り合う駅間（方向つき）の最短所要：全列車での「次駅の着（なければ発）− 前駅の発」の最小値 */
 function minRunTimes(trains) {
   const best = new Map();
   for (const t of trains) {
+    if (t.extra) continue;
     for (let k = 1; k < t.stops.length; k++) {
       const pv = t.stops[k - 1], st = t.stops[k];
       const key = pv.s + "-" + st.s;
@@ -694,6 +1201,7 @@ function minRunTimes(trains) {
 function estimateArrivals(trains) {
   const best = minRunTimes(trains);
   for (const t of trains) {
+    if (t.extra) continue;
     for (let k = 1; k < t.stops.length; k++) {
       const pv = t.stops[k - 1], st = t.stops[k];
       if (st.arrGiven) continue;
@@ -714,7 +1222,7 @@ function checkTrains(trains) {
       if (k === 0) continue;
       const pv = t.stops[k - 1];
       const step = st.s - pv.s;
-      if (t.dir === "down" ? step <= 0 : step >= 0) out.push(`${where}: ${STATIONS[pv.s]}→${STATIONS[st.s]} の駅順が${t.dir === "down" ? "下り" : "上り"}と逆`);
+      if (!t.extra && (t.dir === "down" ? step <= 0 : step >= 0)) out.push(`${where}: ${STATIONS[pv.s]}→${STATIONS[st.s]} の駅順が${t.dir === "down" ? "下り" : "上り"}と逆`);
       if (st.arr <= pv.dep) out.push(`${where}: ${STATIONS[pv.s]} 発${fmt(pv.dep)} → ${STATIONS[st.s]} ${fmt(st.arr)} が単調増加でない`);
     }
   }
@@ -731,7 +1239,8 @@ const SERVICE_END = 28 * 60;   // 翌4:00（0時台は24時以降として扱う
  * 検索用のネットワークを作る。dayType: "weekday"（平日）| "holiday"（土休日。平日のみの列車を除く）
  */
 function buildNetwork(model, { dayType = "weekday" } = {}) {
-  const trains = model.trains.filter(t => dayType === "weekday" || !t.weekdayOnly);
+  // 平日のみの列車は土休日に除く。追加区間は平日／土休日で別のデータ（days）
+  const trains = model.trains.filter(t => (dayType === "weekday" || !t.weekdayOnly) && (!t.days || t.days === dayType));
   const ok = new Set(trains.map(t => t.id));
   const conns = [];
   for (const t of trains) {
@@ -896,7 +1405,8 @@ function annotate(j, { busFirst = null, busLast = null } = {}) {
 
 
 
-/* 駅の位置（STATIONS と同じ順） */
+/* 駅の位置（STATIONS と同じ順）。内房線は上に総武線・京葉線の余白を取るため TOP だけ下げてある */
+const TOP = 70;
 const MAP_PTS = [
   [250, 30], [243, 58], [236, 86], [228, 114], [219, 142], [209, 170], [198, 198], // 千葉〜姉ヶ崎
   [178, 256], [170, 284], [163, 312], [156, 340],                                   // 長浦〜木更津
@@ -904,20 +1414,40 @@ const MAP_PTS = [
   [107, 564], [104, 592], [102, 620], [101, 648], [103, 676], [110, 704],             // 保田〜館山
   [128, 738], [160, 762],                                                             // 九重・千倉
   [196, 752], [220, 732], [242, 712], [264, 692], [286, 672], [308, 652],             // 千歳〜安房鴨川
+].map(([x, y]) => [x, y + TOP]).concat([
+  [160, 40],  // 津田沼（千葉の北西）
+  [170, 100], // 海浜幕張（京葉線。総武線の海側をほぼ平行に通る）
+  [130, 76],  // 新習志野
+]);
+/* 区間：a = 東京寄り、b = 遠い側（"down" は a→b）。kind で線の描き方を変える */
+const MAP_SEGMENTS = [
+  ...Array.from({ length: UCHIBO_N - 1 }, (_, i) => ({ a: i, b: i + 1, kind: i === BUS.a ? "bus" : "rail" })),
+  { a: SI["津田沼"], b: SI["千葉"], kind: "sobu" },
+  { a: SI["新習志野"], b: SI["海浜幕張"], kind: "keiyo" },
+  { a: SI["海浜幕張"], b: SI["蘇我"], kind: "keiyo" },
 ];
-const VB = { x: 36, y: 0, w: 336, h: 800 };
+/* 下り（東京から離れる向き）を決めるための順位。内房線は駅の番号、追加区間は千葉より手前 */
+function mapRank(i) { return i < UCHIBO_N ? i : { [SI["津田沼"]]: -3, [SI["新習志野"]]: -2, [SI["海浜幕張"]]: -1 }[i]; }
+const VB = { x: 36, y: 0, w: 336, h: 800 + TOP };
+/* 海の名前（文字の重なりチェックでも使う） */
+const SEA_LABELS = [{ text: "東京湾", x: 62, y: 300 + TOP }, { text: "太平洋", x: 222, y: 790 + TOP }];
 const MAP_VIEWBOX = `${VB.x} ${VB.y} ${VB.w} ${VB.h}`;
 /* 大きめに描く駅（終点・乗換駅） */
 const MAJOR = new Set(["千葉", "蘇我", "姉ヶ崎", "長浦", "木更津", "君津", "上総湊", "館山", "安房鴨川"].map(n => STATIONS.indexOf(n)));
 /* 文字の大きさ（CSS の font-size と同じ値にすること） */
 const FONT = { st: 11, stMajor: 12, seg: 11, segBus: 11, sea: 12 };
 /* 南端の折り返し（館山→九重→千倉→千歳）の内側は狭いので、区間の時刻の位置を個別に決める（区間の番号 → [x, y, anchor]） */
-const SEG_POS = { 23: [123, 713, "start"], 24: [150, 728, "middle"], 25: [171, 748, "middle"], 26: [205, 731, "end"] };
+const SEG_POS = { 23: [123, 713 + TOP, "start"], 24: [150, 728 + TOP, "middle"], 25: [171, 748 + TOP, "middle"], 26: [205, 731 + TOP, "end"] };
+/* 駅名の位置を個別に決める駅（駅 → [dx, dy, anchor]、丸の中心からの位置）。千葉・蘇我付近は枝線と重なるため */
+const LABEL_POS = {
+  [SI["千葉"]]: [10, 4, "start"], [SI["本千葉"]]: [10, 6, "start"], [SI["蘇我"]]: [-10, 12, "end"],
+  [SI["津田沼"]]: [-10, 4, "end"], [SI["海浜幕張"]]: [-8, 17, "end"], [SI["新習志野"]]: [-10, 4, "end"],
+};
 
 /* 陸側の単位法線（進行方向 d=(dx,dy) に対し (dy,-dx)。千葉→安房鴨川の向きで右手が陸） */
 function landNormal(dx, dy) { const l = Math.hypot(dx, dy) || 1; return [dy / l, -dx / l]; }
 function stationNormal(i) {
-  const a = MAP_PTS[Math.max(0, i - 1)], b = MAP_PTS[Math.min(MAP_PTS.length - 1, i + 1)];
+  const a = MAP_PTS[Math.max(0, i - 1)], b = MAP_PTS[Math.min(UCHIBO_N - 1, i + 1)];
   return landNormal(b[0] - a[0], b[1] - a[1]);
 }
 function anchorFor(nx, th = 0.45) { return nx > th ? "start" : nx < -th ? "end" : "middle"; }
@@ -938,41 +1468,53 @@ function circleR(i, on) { return on ? 8 : MAJOR.has(i) ? 6 : 4.5; }
  */
 function mapLayout(segs = [], sel = {}) {
   const stations = MAP_PTS.map((p, i) => {
-    const [nx, ny] = stationNormal(i);
     const on = i === sel.a || i === sel.b;
-    const x = p[0] - nx * 10, y = p[1] - ny * 10 + (ny > 0.45 ? 0 : ny < -0.45 ? 7 : 4);
-    const anchor = anchorFor(-nx);
+    let x, y, anchor;
+    if (LABEL_POS[i]) { const [dx, dy, an] = LABEL_POS[i]; x = p[0] + dx; y = p[1] + dy; anchor = an; }
+    else {
+      const [nx, ny] = stationNormal(i);
+      x = p[0] - nx * 10; y = p[1] - ny * 10 + (ny > 0.45 ? 0 : ny < -0.45 ? 7 : 4); anchor = anchorFor(-nx);
+    }
     const fs = MAJOR.has(i) ? FONT.stMajor : FONT.st;
     return { i, x: p[0], y: p[1], r: circleR(i, on), on, label: { x: r1(x), y: r1(y), anchor, box: textBox(x, y, anchor, STATIONS[i], fs) } };
   });
   const segOut = segs.map((g, i) => {
     let x, y, anchor;
+    const sg = MAP_SEGMENTS[i];
     if (SEG_POS[i]) [x, y, anchor] = SEG_POS[i];
     else {
-      const a = MAP_PTS[i], b = MAP_PTS[i + 1];
-      const [nx, ny] = landNormal(b[0] - a[0], b[1] - a[1]);
-      x = (a[0] + b[0]) / 2 + nx * 12; y = (a[1] + b[1]) / 2 + ny * 12 + 3.5; anchor = anchorFor(nx, 0.6);
+      const a = MAP_PTS[sg.a], b = MAP_PTS[sg.b];
+      let [nx, ny] = landNormal(b[0] - a[0], b[1] - a[1]);
+      const off = sg.kind === "sobu" || sg.kind === "keiyo" ? 15 : 12; // 枝線は斜めなので少し離す
+      if (sg.kind === "keiyo") { nx = -nx; ny = -ny; } // 京葉線は海側に書く（陸側は内房線の駅名と重なるため）
+      x = (a[0] + b[0]) / 2 + nx * off; y = (a[1] + b[1]) / 2 + ny * off + 3.5; anchor = anchorFor(nx, 0.6);
     }
     return { ...g, x: r1(x), y: r1(y), anchor, box: textBox(x, y, anchor, g.text, g.bus ? FONT.segBus : FONT.seg) };
   });
   return { stations, segs: segOut };
 }
 
-/* 陸地の多角形：線を海側へ少しずらした海岸線＋東側を閉じる */
+/* 陸地の多角形：線を海側へ少しずらした海岸線＋東側を閉じる。
+ * 千葉付近は京葉線（新習志野→海浜幕張→蘇我）が海沿いなので、そこから内房線の蘇我以南へつなぐ */
 function landPath() {
-  const coast = MAP_PTS.map((p, i) => { const [nx, ny] = stationNormal(i); return [p[0] - nx * 9, p[1] - ny * 9]; });
-  const pts = [[262, -10], ...coast, [328, 632], [VB.x + VB.w + 10, 590], [VB.x + VB.w + 10, -10]];
+  const keiyo = [SI["新習志野"], SI["海浜幕張"]].map(i => {
+    const p = MAP_PTS[i], q = MAP_PTS[SI["蘇我"]], o = MAP_PTS[SI["新習志野"]];
+    const [nx, ny] = landNormal(q[0] - o[0], q[1] - o[1]);
+    return [p[0] - nx * 9, p[1] - ny * 9];
+  });
+  const coast = MAP_PTS.slice(SI["蘇我"], UCHIBO_N).map((p, k) => { const [nx, ny] = stationNormal(k + SI["蘇我"]); return [p[0] - nx * 9, p[1] - ny * 9]; });
+  const pts = [[VB.x - 10, -10], [VB.x - 10, 58], ...keiyo, ...coast, [328, 632 + TOP], [VB.x + VB.w + 10, 590 + TOP], [VB.x + VB.w + 10, -10]];
   return "M" + pts.map(p => `${r1(p[0])},${r1(p[1])}`).join(" L") + " Z";
 }
 
 /**
  * 隣り合う駅の間ごとの最終（dir "down"＝千葉→安房鴨川の向き、"up"＝逆向き）。
- * 戻り値: 長さ 31 の配列。{text, bus?, none?}
+ * 戻り値: MAP_SEGMENTS と同じ順・同じ長さの配列。{text, bus?, none?}
  */
 function segmentLasts(net, dir, opts) {
   const out = [];
-  for (let i = 0; i < STATIONS.length - 1; i++) {
-    const [o, d] = dir === "down" ? [i, i + 1] : [i + 1, i];
+  for (const sg of MAP_SEGMENTS) {
+    const [o, d] = dir === "down" ? [sg.a, sg.b] : [sg.b, sg.a];
     const j = lastJourney(net, o, d, opts);
     if (!j) out.push({ text: "—", none: true });
     else if (j.busOnly) out.push({ text: opts.busLast == null ? "バス" : `バス〜${fmt(opts.busLast)}`, bus: true });
@@ -990,17 +1532,16 @@ function mapSvg({ sel = {}, segs = [], dirLabel = "" } = {}) {
   let s = `<svg class="map" viewBox="${MAP_VIEWBOX}" role="img" aria-label="内房線 路線図（${dirLabel}の区間ごとの最終時刻）">`;
   s += `<rect class="sea" x="${VB.x}" y="${VB.y}" width="${VB.w}" height="${VB.h}"/>`;
   s += `<path class="land" d="${landPath()}"/>`;
-  s += `<text class="sea-name" x="62" y="300">東京湾</text><text class="sea-name" x="222" y="790">太平洋</text>`;
-  // 線路（姉ヶ崎〜長浦はバス＝点線）
+  for (const t of SEA_LABELS) s += `<text class="sea-name" x="${t.x}" y="${t.y}">${t.text}</text>`;
+  // 線路（内房線は1本のパス、姉ヶ崎〜長浦はバス＝点線、総武線・京葉線は細い別の色）
   const line = (a, b) => "M" + P.slice(a, b + 1).map(p => p.join(",")).join(" L");
-  s += `<path class="rail" d="${line(0, BUS.a)}"/><path class="rail" d="${line(BUS.b, P.length - 1)}"/>`;
+  const seg = sg => `M${P[sg.a].join(",")} L${P[sg.b].join(",")}`;
+  s += `<path class="rail" d="${line(0, BUS.a)}"/><path class="rail" d="${line(BUS.b, UCHIBO_N - 1)}"/>`;
   s += `<path class="bus-line" d="${line(BUS.a, BUS.b)}"/>`;
-  // 選んだ区間（バス部分は黄色の点線のまま）
+  for (const sg of MAP_SEGMENTS) if (sg.kind === "sobu" || sg.kind === "keiyo") s += `<path class="branch ${sg.kind}" d="${seg(sg)}"/>`;
+  // 選んだ区間（駅と駅を結ぶ区間の並び。バス部分は黄色の点線のまま）
   if (sel.a != null && sel.b != null) {
-    const lo = Math.min(sel.a, sel.b), hi = Math.max(sel.a, sel.b);
-    if (lo < BUS.a) s += `<path class="sel-line" d="${line(lo, Math.min(hi, BUS.a))}"/>`;
-    if (hi > BUS.b) s += `<path class="sel-line" d="${line(Math.max(lo, BUS.b), hi)}"/>`;
-    if (lo <= BUS.a && hi >= BUS.b) s += `<path class="sel-line bus" d="${line(BUS.a, BUS.b)}"/>`;
+    for (const sg of mapPath(sel.a, sel.b)) s += `<path class="sel-line${sg.kind === "bus" ? " bus" : ""}" d="${seg(sg)}"/>`;
   }
   // 区間の最終時刻（陸側）
   for (const g of L.segs) {
@@ -1014,6 +1555,22 @@ function mapSvg({ sel = {}, segs = [], dirLabel = "" } = {}) {
       `<text x="${st.label.x}" y="${st.label.y}" text-anchor="${st.label.anchor}">${STATIONS[st.i]}</text></g>`;
   }
   return s + "</svg>";
+}
+
+/* 路線図の上で駅 a から駅 b までたどる区間の並び（区間は木構造なので経路は1つ） */
+function mapPath(a, b) {
+  const prev = new Map([[a, null]]), queue = [a];
+  while (queue.length) {
+    const u = queue.shift();
+    if (u === b) break;
+    for (const sg of MAP_SEGMENTS) {
+      const v = sg.a === u ? sg.b : sg.b === u ? sg.a : -1;
+      if (v >= 0 && !prev.has(v)) { prev.set(v, { u, sg }); queue.push(v); }
+    }
+  }
+  const out = [];
+  for (let v = b; prev.get(v); v = prev.get(v).u) out.unshift(prev.get(v).sg);
+  return out;
 }
 
 /* 点と箱の距離（中なら 0） */
@@ -1043,7 +1600,8 @@ function nearestStation(x, y, maxDist = 24, pad = 6) {
 const MODEL = buildModel();
 const NETS = { weekday: buildNetwork(MODEL, { dayType: "weekday" }), holiday: buildNetwork(MODEL, { dayType: "holiday" }) };
 const STORE_KEY = "uchibo-v2";
-const GROUPS = [["千葉〜姉ヶ崎", 0, 6], ["長浦〜木更津", 7, 10], ["君津〜館山", 11, 23], ["九重〜安房鴨川", 24, 31]];
+const GROUPS = [["千葉〜姉ヶ崎", 0, 6], ["長浦〜木更津", 7, 10], ["君津〜館山", 11, 23], ["九重〜安房鴨川", 24, 31],
+  ["総武線（千葉〜）", 32, 32], ["京葉線（蘇我〜）", 33, 34]];
 
 const $ = id => document.getElementById(id);
 const fromSel = $("from"), toSel = $("to");
@@ -1120,6 +1678,8 @@ function busHoursStr(o) {
   if (o.busFirst == null && o.busLast == null) return "運行時間 指定なし";
   return `運行 ${o.busFirst == null ? "指定なし" : fmt(o.busFirst)}〜${o.busLast == null ? "指定なし" : fmt(o.busLast)}`;
 }
+/* 列車の区間の説明：内房線は「○○行」、追加区間は路線名（行き先は持っていない） */
+function trainName(tr) { return tr.extra ? tr.line : `内房線 ${STATIONS[tr.stops.at(-1).s]}行`; }
 function busStartText(j, o) {
   const b = j.legs[0], n = j.legs[1];
   const pre = n ? `${STATIONS[n.from]} ${fmt(n.dep)} 発に乗るには、` : "";
@@ -1141,7 +1701,7 @@ function render(j, i, o, tag) {
     if (isBus) info = `バス（${o.busMin}分想定・随時運行と仮定）`;
     else {
       const tr = MODEL.trains[l.train];
-      info = `内房線 ${STATIONS[tr.stops.at(-1).s]}行　${l.arr - l.dep}分${l.weekdayOnly ? "　<b>平日のみ</b>" : ""}`;
+      info = `${trainName(tr)}　${l.arrEst ? "約" : ""}${l.arr - l.dep}分${l.weekdayOnly ? "　<b>平日のみ</b>" : ""}`;
     }
     html += `<li class="seg-line${isBus ? " bus" : ""}"><span></span><span class="bar"></span><span class="info">${info}</span></li>`;
     html += `<li class="stop${isBus ? " bus" : ""}"><span class="tm">${tmHtml(l.arr, l.arrEst)}</span><span class="dot"></span><span class="nm">${STATIONS[l.to]} 着</span></li>`;
@@ -1227,7 +1787,7 @@ $("tabMap").onclick = () => showTab("map");
 function legLine(l, o) {
   if (l.type === "bus") return `<li class="bus">${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${fmt(l.arr)}　バス（${o.busMin}分想定）</li>`;
   const tr = MODEL.trains[l.train];
-  return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${STATIONS[tr.stops.at(-1).s]}行${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
+  return `<li>${STATIONS[l.from]} ${fmt(l.dep)} → ${STATIONS[l.to]} ${tmHtml(l.arr, l.arrEst)}　${tr.extra ? tr.line : `${STATIONS[tr.stops.at(-1).s]}行`}${l.weekdayOnly ? "（平日のみ）" : ""}</li>`;
 }
 function renderMapResult(o) {
   const { a, b } = mapState;
@@ -1285,7 +1845,7 @@ function tapStation(i) {
   const m = mapState;
   if (m.a == null || m.b != null) { m.a = i; m.b = null; }
   else if (i === m.a) m.a = null;
-  else { m.b = i; m.dir = i > m.a ? "down" : "up"; fromSel.value = m.a; toSel.value = m.b; }
+  else { m.b = i; m.dir = mapRank(i) > mapRank(m.a) ? "down" : "up"; fromSel.value = m.a; toSel.value = m.b; }
   run();
 }
 function setDir(d) {

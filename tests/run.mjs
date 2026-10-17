@@ -3,7 +3,7 @@ import { buildModel, checkTrains, fmt, tm } from "../src/model.mjs";
 import { STATIONS, SI } from "../src/data/stations.mjs";
 import { buildNetwork, earliest, journeys, lastJourney, annotate } from "../src/search.mjs";
 import { build, bundleScript } from "../build.mjs";
-import { segmentLasts, mapSvg, mapLayout, nearestStation, textBox, FONT, MAP_PTS, MAP_VIEWBOX } from "../src/ui/map.mjs";
+import { segmentLasts, mapSvg, mapLayout, mapPath, nearestStation, textBox, FONT, MAP_PTS, MAP_SEGMENTS, MAP_VIEWBOX, SEA_LABELS } from "../src/ui/map.mjs";
 import vm from "node:vm";
 
 let failed = 0, passed = 0;
@@ -177,6 +177,71 @@ test("千葉→安房鴨川：経路が見つかり、駅と時刻がつなが�
   });
 });
 
+/* ===== 段階6：総武線（千葉〜津田沼）・京葉線（蘇我〜海浜幕張〜新習志野） ===== */
+const HOL = buildNetwork(model, { dayType: "holiday" });
+const lines = j => j.legs.map(l => l.type === "bus" ? "バス" : (trains[l.train].line || "内房線")).join(" / ");
+test("追加区間：16表すべて読め、平日・土休日に分かれ、着は推定（頃）", () => {
+  const ex = trains.filter(t => t.extra);
+  eq(new Set(ex.map(t => t.table)).size, 16);
+  if (ex.length < 1500) throw new Error(`本数 ${ex.length}`);
+  for (const t of ex) {
+    if (!["weekday", "holiday"].includes(t.days)) throw new Error(t.table);
+    if (!t.stops.slice(1).every(s => s.arrEst)) throw new Error(`${t.table} ${t.col}`);
+  }
+  // 平日のネットワークに土休日の列車は入らない（逆も）
+  const wkIds = new Set(net.conns.map(c => c.trip)), holIds = new Set(HOL.conns.map(c => c.trip));
+  for (const t of ex) if ((t.days === "weekday") !== wkIds.has(t.id) || (t.days === "holiday") !== holIds.has(t.id)) throw new Error(`${t.table} ${t.col}`);
+});
+test("追加区間：特急や行き先記号が紛れ込んでいない（記号は 快・幕 だけ）", () => {
+  for (const t of trains.filter(t => t.extra)) if (!/^\d{1,2}:\d{2}(快|幕)?$/.test(t.col)) throw new Error(`${t.table} ${t.col}`);
+  // 快速は新習志野に停まらない、幕は蘇我へ行かない
+  for (const t of trains.filter(t => t.extra && t.col.endsWith("快"))) if (t.stops.some(s => s.s === SI["新習志野"])) throw new Error(`${t.table} ${t.col}`);
+  for (const t of trains.filter(t => t.extra && t.col.endsWith("幕"))) eq(STATIONS[t.stops.at(-1).s], "海浜幕張", `${t.table} ${t.col}`);
+});
+test("津田沼→千葉：10:05発の快速は千葉10:16着", () => {
+  const j = earliest(net, SI["津田沼"], SI["千葉"], tm("10:05"), O);
+  eq(fmt(j.dep), "10:05", legStr(j)); eq(fmt(j.arr), "10:16"); eq(lines(j), "総武線快速"); eq(j.legs[0].arrEst, true);
+});
+test("千葉→津田沼：平日12:02発の快速は津田沼12:12頃着", () => {
+  const j = earliest(net, SI["千葉"], SI["津田沼"], tm("12:02"), O);
+  eq(fmt(j.dep), "12:02", legStr(j)); eq(fmt(j.arr), "12:12"); eq(lines(j), "総武線快速"); eq(annotate(j, O).arrEst, true);
+});
+test("新習志野→蘇我：平日11:13発の普通は蘇我11:30頃着（直通）", () => {
+  const j = earliest(net, SI["新習志野"], SI["蘇我"], tm("11:13"), O);
+  eq(fmt(j.dep), "11:13", legStr(j)); eq(fmt(j.arr), "11:30"); eq(j.legs.length, 1); eq(lines(j), "京葉線");
+});
+test("新習志野→蘇我（土休日12:00以降）：海浜幕張で乗り換える（普通12:04 海浜幕張行 → 快速12:18）", () => {
+  const j = earliest(HOL, SI["新習志野"], SI["蘇我"], tm("12:00"), O);
+  eq(j.legs.length, 2, legStr(j)); eq(STATIONS[j.legs[0].to], "海浜幕張");
+  eq(fmt(j.legs[0].dep), "12:04"); eq(fmt(j.legs[1].dep), "12:18"); eq(lines(j), "京葉線 / 京葉線快速");
+  const list = journeys(HOL, SI["新習志野"], SI["蘇我"], "dep", tm("12:00"), O);
+  if (list.some(k => k.legs.length === 1 && k.dep < tm("16:00"))) throw new Error("土休日の日中に直通が出ている");
+});
+test("蘇我→新習志野（土休日11:00以降）：快速で海浜幕張へ行き、普通に乗り換える", () => {
+  const j = earliest(HOL, SI["蘇我"], SI["新習志野"], tm("11:00"), O);
+  eq(j.legs.length, 2, legStr(j)); eq(STATIONS[j.legs[0].to], "海浜幕張");
+  eq(lines(j), "京葉線快速 / 京葉線"); eq(fmt(j.legs[0].dep), "11:05"); eq(fmt(j.arr), "11:24");
+});
+test("君津→津田沼：平日10:00までに着く経路があり、千葉で乗り換える", () => {
+  const list = journeys(net, SI["君津"], SI["津田沼"], "arr", tm("10:00"), O);
+  if (!list.length) throw new Error("経路なし");
+  const j = list[0];
+  eq(STATIONS[j.legs.at(-1).from], "千葉", legStr(j)); if (!/^総武線/.test(lines(j).split(" / ").at(-1))) throw new Error(lines(j));
+  if (j.arr > tm("10:00")) throw new Error(legStr(j));
+});
+test("君津→新習志野：蘇我で京葉線に乗り換える", () => {
+  const j = earliest(net, SI["君津"], SI["新習志野"], tm("9:00"), O);
+  const k = j.legs.findIndex(l => l.type === "train" && trains[l.train].line?.startsWith("京葉線"));
+  if (k < 0) throw new Error(legStr(j));
+  eq(STATIONS[j.legs[k].from], "蘇我", legStr(j));
+});
+test("路線図：枝線の区間の最終と、駅をたどる経路", () => {
+  const dn = segmentLasts(net, "down", O); // 下り＝津田沼→千葉、新習志野→海浜幕張、海浜幕張→蘇我
+  const i = MAP_SEGMENTS.findIndex(g => g.a === SI["津田沼"]);
+  if (!/^0:\d{2}$/.test(dn[i].text)) throw new Error(dn[i].text);
+  eq(mapPath(SI["津田沼"], SI["新習志野"]).length, 5); // 津田沼-千葉-本千葉-蘇我-海浜幕張-新習志野
+});
+
 /* ===== バスの運行時間（FEEDBACK 段階2-1） ===== */
 test("運行時間 指定なし：千葉→長浦の最終は0:10発（バス0:31発）、未確認の注意が出る", () => {
   const j = lastJourney(net, SI["千葉"], SI["長浦"], O);
@@ -233,30 +298,31 @@ test("矢印の接続は待ちが短くてもギリギリ扱いにしない", ()
 });
 
 /* ===== 路線図 ===== */
-test("路線図：駅の座標が32駅ぶん、隣の駅と近すぎない", () => {
+test("路線図：駅の座標が全駅ぶん、隣の駅と近すぎない", () => {
   eq(MAP_PTS.length, STATIONS.length);
-  for (let i = 1; i < MAP_PTS.length; i++) {
-    const d = Math.hypot(MAP_PTS[i][0] - MAP_PTS[i - 1][0], MAP_PTS[i][1] - MAP_PTS[i - 1][1]);
-    if (d < 26) throw new Error(`${STATIONS[i - 1]}〜${STATIONS[i]} の間隔 ${d.toFixed(1)}`);
+  for (const { a, b } of MAP_SEGMENTS) {
+    const d = Math.hypot(MAP_PTS[a][0] - MAP_PTS[b][0], MAP_PTS[a][1] - MAP_PTS[b][1]);
+    if (d < 26) throw new Error(`${STATIONS[a]}〜${STATIONS[b]} の間隔 ${d.toFixed(1)}`);
   }
   for (let i = 0; i < MAP_PTS.length; i++) eq(nearestStation(MAP_PTS[i][0] + 3, MAP_PTS[i][1] - 3), i, STATIONS[i]);
   eq(nearestStation(40, 400), -1);
 });
 test("路線図：区間ごとの最終（下り 木更津→君津 23:14、上り 君津→木更津 22:59、姉ヶ崎〜長浦はバス）", () => {
   const dn = segmentLasts(net, "down", O), up = segmentLasts(net, "up", O);
-  eq(dn.length, 31); eq(up.length, 31);
+  eq(dn.length, MAP_SEGMENTS.length); eq(up.length, MAP_SEGMENTS.length); eq(MAP_SEGMENTS.length, 34); // 内房線31＋総武線1＋京葉線2
   eq(dn[SI["木更津"]].text, "23:14"); eq(up[SI["木更津"]].text, "22:59");
   eq(dn[SI["姉ヶ崎"]].bus, true); eq(up[SI["姉ヶ崎"]].text, "バス");
   eq(segmentLasts(net, "up", { ...O, busLast: tm("21:30") })[SI["姉ヶ崎"]].text, "バス〜21:30");
   eq(dn[SI["長浦"]].text, "21:33"); eq(dn[0].text, "0:10");
   for (const g of [...dn, ...up]) if (!/^(\d{1,2}:\d{2}|バス.*)$/.test(g.text)) throw new Error(g.text);
 });
-test("路線図：SVG に32駅・点線のバス区間・選択区間・31個の時刻が入る", () => {
+test("路線図：SVG に全駅・点線のバス区間・枝線・選択区間・区間ごとの時刻が入る", () => {
   const svg = mapSvg({ sel: { a: 0, b: SI["君津"] }, segs: segmentLasts(net, "down", O), dirLabel: "下り" });
-  eq((svg.match(/<g class="st/g) || []).length, 32);
+  eq((svg.match(/<g class="st/g) || []).length, 35);
   eq((svg.match(/class="bus-line"/g) || []).length, 1);
-  eq((svg.match(/class="sel-line( bus)?"/g) || []).length, 3); // 千葉〜姉ヶ崎、バス、長浦〜君津
-  eq((svg.match(/<text class="seg/g) || []).length, 31);
+  eq((svg.match(/class="branch sobu"/g) || []).length, 1); eq((svg.match(/class="branch keiyo"/g) || []).length, 2);
+  eq((svg.match(/class="sel-line( bus)?"/g) || []).length, 11); // 千葉〜君津の11区間（うちバス1）
+  eq((svg.match(/<text class="seg/g) || []).length, 34);
   eq((svg.match(/aria-pressed="true"/g) || []).length, 2);
   if (/NaN|undefined/.test(svg)) throw new Error("NaN/undefined を含む");
 });
@@ -267,22 +333,23 @@ test("路線図：文字どうし・文字と駅の丸・文字と線路が重�
   const probs = new Set();
   const hit = (a, b) => a.x0 < b.x1 + GAP && b.x0 < a.x1 + GAP && a.y0 < b.y1 + GAP && b.y0 < a.y1 + GAP;
   const boxCircle = (b, c) => Math.hypot(Math.max(b.x0 - c.x, 0, c.x - b.x1), Math.max(b.y0 - c.y, 0, c.y - b.y1)) < c.r + 1.5 + GAP;
-  const sels = [{}, { a: SI["館山"], b: SI["千歳"] }, { a: SI["九重"], b: SI["千倉"] }, { a: 0, b: SI["安房鴨川"] }];
+  const sels = [{}, { a: SI["館山"], b: SI["千歳"] }, { a: SI["九重"], b: SI["千倉"] }, { a: 0, b: SI["安房鴨川"] },
+    { a: SI["津田沼"], b: SI["新習志野"] }, { a: SI["蘇我"], b: SI["海浜幕張"] }];
   for (const o of [O, { ...O, busLast: tm("21:30") }]) for (const dir of ["down", "up"]) for (const dayType of ["weekday", "holiday"]) for (const sel of sels) {
     const L = mapLayout(segmentLasts(buildNetwork(model, { dayType }), dir, o), sel);
     const texts = [
       ...L.stations.map(st => ({ str: STATIONS[st.i], box: st.label.box })),
       ...L.segs.map(g => ({ str: g.text, box: g.box })),
-      { str: "東京湾", box: textBox(62, 300, "start", "東京湾", FONT.sea + 3) }, // letter-spacing ぶん広めに
-      { str: "太平洋", box: textBox(222, 790, "start", "太平洋", FONT.sea + 3) },
+      ...SEA_LABELS.map(t => ({ str: t.text, box: textBox(t.x, t.y, "start", t.text, FONT.sea + 3) })), // letter-spacing ぶん広めに
     ];
     texts.forEach((a, i) => texts.slice(i + 1).forEach(b => { if (hit(a.box, b.box)) probs.add(`${dir} 文字の重なり ${a.str} / ${b.str}`); }));
     for (const t of texts) {
       const b = t.box;
       if (b.x0 < vx || b.x1 > vx + vw || b.y0 < vy + 2 || b.y1 > vy + vh - 6) probs.add(`${dir} 枠に近い ${t.str}`);
       for (const c of L.stations) if (boxCircle(b, c) && t.str !== STATIONS[c.i]) probs.add(`${dir} 丸と重なる ${t.str} / ${STATIONS[c.i]}の丸`);
-      outer: for (let i = 0; i < MAP_PTS.length - 1; i++) for (let k = 0; k <= 20; k++) {
-        const x = MAP_PTS[i][0] + (MAP_PTS[i + 1][0] - MAP_PTS[i][0]) * k / 20, y = MAP_PTS[i][1] + (MAP_PTS[i + 1][1] - MAP_PTS[i][1]) * k / 20;
+      outer: for (const { a: sa, b: sb } of MAP_SEGMENTS) for (let k = 0; k <= 20; k++) {
+        const [p, q] = [MAP_PTS[sa], MAP_PTS[sb]];
+        const x = p[0] + (q[0] - p[0]) * k / 20, y = p[1] + (q[1] - p[1]) * k / 20;
         if (x > b.x0 - 2 && x < b.x1 + 2 && y > b.y0 - 2 && y < b.y1 + 2) { probs.add(`${dir} 線と重なる ${t.str}`); break outer; }
       }
     }
@@ -299,7 +366,7 @@ test("路線図：駅名の文字の上をタップしても、その駅が選�
 test("路線図：選んだ区間がバスを含むとき、バス部分は点線（sel-line bus）で描く", () => {
   const svg = mapSvg({ sel: { a: 0, b: SI["君津"] }, segs: [] });
   eq((svg.match(/class="sel-line bus"/g) || []).length, 1);
-  eq((svg.match(/class="sel-line"/g) || []).length, 2);
+  eq((svg.match(/class="sel-line"/g) || []).length, 10);
   eq((mapSvg({ sel: { a: SI["長浦"], b: SI["君津"] } }).match(/class="sel-line bus"/g) || []).length, 0);
 });
 
@@ -331,7 +398,9 @@ test("ビルド：スクリプトが構文エラーなし、偽の DOM 上で動
     Option: function (t, v) { this.text = t; this.value = v; },
     localStorage: { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } },
     window: { scrollTo() {} },
-    Date, Math, JSON, Number, String, Map, Set, Array, Object, Error, console,
+    // 現在時刻に左右されないよう、平日（2026-10-14 水）の 10:00 に固定する
+    Date: class extends Date { constructor(...a) { if (a.length) super(...a); else super(2026, 9, 14, 10, 0); } },
+    Math, JSON, Number, String, Map, Set, Array, Object, Error, console,
   };
   vm.runInNewContext(code, ctx);
   if (!el("results").innerHTML.includes("card")) throw new Error("結果が描画されない:\n" + el("results").innerHTML.slice(0, 200));

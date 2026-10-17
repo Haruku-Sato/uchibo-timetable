@@ -10,6 +10,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), "utf8");
 const MODULES = [
   "src/data/stations.mjs",
   "src/data/timetable.mjs",
+  "src/data/extra.mjs",
   "src/model.mjs",
   "src/search.mjs",
   "src/ui/map.mjs",
