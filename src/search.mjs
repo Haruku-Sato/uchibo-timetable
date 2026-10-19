@@ -92,26 +92,75 @@ export function earliest(net, origin, dest, t, { margin = 2, busMin = BUS.defaul
 }
 
 /**
+ * 範囲内の経路（遅く出て早く着く経路があるものは除く。出発の早い順）。
+ * mode "dep" … 出発が [from, to] の経路、"arr" … 到着が [from, to] の経路。
+ * 経路を1つ見つけたら、次はその出発の1分後から調べる（それまでの時刻から探しても同じ経路になるため）。
+ */
+export function journeysRange(net, origin, dest, { mode, from, to }, opts = {}) {
+  const byArr = new Map();
+  let t = mode === "dep" ? Math.max(SERVICE_START, from) : SERVICE_START;
+  const end = mode === "dep" ? Math.min(SERVICE_END, to) : Math.min(SERVICE_END, to);
+  while (t <= end) {
+    const j = earliest(net, origin, dest, t, opts);
+    if (!j) break;
+    if (mode === "dep" ? j.dep > to : j.arr > to) break;
+    if (mode === "dep" || j.arr >= from) {
+      const prev = byArr.get(j.arr);
+      if (!prev || j.dep > prev.dep) byArr.set(j.arr, j);
+    }
+    t = j.dep + 1;
+  }
+  const list = [...byArr.values()].sort((a, b) => a.dep - b.dep);
+  return list.filter(j => !list.some(k => k !== j && k.dep >= j.dep && k.arr <= j.arr));
+}
+
+/**
  * 出発時刻指定（mode "dep"）／到着時刻指定（mode "arr"）で、最大 limit 件の経路を返す（v1 と同じ考え方）。
  * "dep" は早く出る順、"arr" は遅く出る順（先頭が「最終」）。
  */
 export function journeys(net, origin, dest, mode, time, opts = {}, limit = 6) {
   const span = 7 * 60;
-  const lo = mode === "dep" ? time : Math.max(SERVICE_START, time - span);
-  const hi = mode === "dep" ? Math.min(SERVICE_END, time + span) : time;
-  const map = new Map();
-  for (let t = lo; t <= hi; t++) {
-    const j = earliest(net, origin, dest, t, opts);
-    if (!j) continue;
-    if (mode === "arr" && j.arr > time) continue;
-    const prev = map.get(j.arr);
-    if (!prev || j.dep > prev.dep) map.set(j.arr, j);
-  }
-  // 遅く出て早く（同じに）着く経路があるものは除く
-  let list = [...map.values()].sort((a, b) => a.dep - b.dep);
-  list = list.filter(j => !list.some(k => k !== j && k.dep >= j.dep && k.arr <= j.arr));
+  const list = mode === "dep"
+    ? journeysRange(net, origin, dest, { mode, from: time, to: time + span }, opts)
+    : journeysRange(net, origin, dest, { mode, from: time - span, to: time }, opts);
   if (list.length && list.every(j => j.legs.every(l => l.type === "bus"))) return mode === "dep" ? list.slice(0, 1) : list.slice(-1);
   return mode === "dep" ? list.slice(0, limit) : list.reverse().slice(0, limit);
+}
+
+/**
+ * 前後の便：今の一覧 shown より前（"before"）／後（"after"）の経路を、近い順に n 件。
+ * 基準は mode "dep" なら出発、"arr" なら到着の時刻。今の一覧にある経路や、それに負ける経路（遅く出て早く着く経路がある）は除く。
+ * 戻り値は出発の早い順。
+ */
+export function moreJourneys(net, origin, dest, mode, shown, side, opts = {}, n = 3) {
+  const key = j => mode === "dep" ? j.dep : j.arr;
+  const keys = shown.map(key);
+  const lo = keys.length ? Math.min(...keys) : null, hi = keys.length ? Math.max(...keys) : null;
+  let range;
+  if (side === "before") range = { mode, from: SERVICE_START, to: (lo ?? SERVICE_END) - 1 };
+  else range = { mode, from: (hi ?? SERVICE_START) + 1, to: SERVICE_END };
+  const cand = journeysRange(net, origin, dest, range, opts)
+    .filter(j => !shown.some(k => k.dep === j.dep && k.arr === j.arr))
+    .filter(j => !shown.some(k => k.dep >= j.dep && k.arr <= j.arr));
+  if (cand.every(j => j.legs.every(l => l.type === "bus"))) return []; // バスだけの経路は随時なので前後の便はない
+  return side === "before" ? cand.slice(-n) : cand.slice(0, n);
+}
+
+/* 所要時間順：所要の短い順、同じなら早く着く順 */
+export function byDuration(list) {
+  return [...list].sort((a, b) => (a.arr - a.dep) - (b.arr - b.dep) || a.arr - b.arr);
+}
+/* 乗車時間（列車・バスに乗っている時間の合計）と待ち時間（乗換の待ちの合計）。和は所要時間 */
+export function rideTime(j) { return j.legs.reduce((s, l) => s + (l.arr - l.dep), 0); }
+export function waitTime(j) { return j.legs.reduce((s, l, k) => s + (k ? l.dep - j.legs[k - 1].arr : 0), 0); }
+
+/**
+ * 1本前の便：最終（last）より早く着く経路のうち、一番遅く出るもの。なければ null。
+ */
+export function prevBeforeLast(net, origin, dest, last, opts = {}) {
+  if (!last || last.busOnly) return null;
+  const list = journeysRange(net, origin, dest, { mode: "arr", from: SERVICE_START, to: last.arr - 1 }, opts);
+  return list.length ? list.reduce((a, b) => (b.dep > a.dep ? b : a)) : null;
 }
 
 /**

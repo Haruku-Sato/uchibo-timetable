@@ -48,6 +48,15 @@
       </div>
       <button type="button" class="now last" id="last">この区間の最終</button>
     </div>
+    <div class="row" id="sortRow">
+      <div class="seg" role="group" aria-label="並び">
+        <button type="button" id="sDep" aria-pressed="true">出発順</button>
+        <button type="button" id="sDur" aria-pressed="false">所要時間順</button>
+      </div>
+      <label class="span" for="span" id="spanLab" hidden>範囲<select id="span">
+        <option value="2">2時間</option><option value="3" selected>3時間</option><option value="4">4時間</option><option value="6">6時間</option><option value="all">終日</option>
+      </select></label>
+    </div>
 
     <details class="settings" id="settings">
       <summary>設定 <span id="setSummary"></span></summary>

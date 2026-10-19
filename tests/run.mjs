@@ -1,7 +1,7 @@
 /* node tests/run.mjs */
 import { buildModel, checkTrains, fmt, tm } from "../src/model.mjs";
 import { STATIONS, SI } from "../src/data/stations.mjs";
-import { buildNetwork, earliest, journeys, lastJourney, annotate } from "../src/search.mjs";
+import { buildNetwork, earliest, journeys, lastJourney, annotate, journeysRange, moreJourneys, byDuration, rideTime, waitTime, prevBeforeLast, SERVICE_START, SERVICE_END } from "../src/search.mjs";
 import { build, buildSite, bundleScript, ICONS } from "../build.mjs";
 import fs from "node:fs";
 import { segmentLasts, mapSvg, mapLayout, mapPath, nearestStation, textBox, FONT, MAP_PTS, MAP_SEGMENTS, MAP_VIEWBOX, SEA_LABELS } from "../src/ui/map.mjs";
@@ -12,7 +12,7 @@ function test(name, fn) {
   try { fn(); passed++; console.log(`ok   ${name}`); }
   catch (e) { failed++; console.log(`FAIL ${name}\n     ${String(e.message).replace(/\n/g, "\n     ")}`); }
 }
-function eq(a, b, msg = "") { if (a !== b) throw new Error(`${msg} 期待値 ${b} / 実際 ${a}`); }
+function eq(a, b, msg = "") { if (a !== b) throw new Error(`${msg} 期待値 ${JSON.stringify(b)} / 実際 ${JSON.stringify(a)}\n${new Error().stack.split("\n")[2].trim()}`); }
 function noProblems(list) { if (list.length) throw new Error(list.join("\n")); }
 
 const model = buildModel();
@@ -243,6 +243,68 @@ test("路線図：枝線の区間の最終と、駅をたどる経路", () => {
   eq(mapPath(SI["津田沼"], SI["新習志野"]).length, 5); // 津田沼-千葉-本千葉-蘇我-海浜幕張-新習志野
 });
 
+/* ===== 段階8：前後の便・所要時間順 ===== */
+test("所要時間順・終日（君津→千葉）：1位 16:39発（17:57着・78分）、2位 8:07発（9:26着・79分）", () => {
+  const list = byDuration(journeysRange(net, SI["君津"], SI["千葉"], { mode: "dep", from: SERVICE_START, to: SERVICE_END }, O));
+  eq(`${fmt(list[0].dep)}-${fmt(list[0].arr)}-${list[0].arr - list[0].dep}`, "16:39-17:57-78", legStr(list[0]));
+  eq(`${fmt(list[1].dep)}-${fmt(list[1].arr)}-${list[1].arr - list[1].dep}`, "8:07-9:26-79", legStr(list[1]));
+  for (let i = 1; i < list.length; i++) {
+    const a = list[i - 1], b = list[i];
+    if ((a.arr - a.dep) > (b.arr - b.dep) || ((a.arr - a.dep) === (b.arr - b.dep) && a.arr > b.arr)) throw new Error("並び順");
+  }
+});
+test("journeysRange：範囲の内側だけ、遅く出て早く着く経路があるものは除く", () => {
+  const dep = journeysRange(net, SI["君津"], SI["千葉"], { mode: "dep", from: tm("8:00"), to: tm("11:00") }, O);
+  eq(dep.map(j => fmt(j.dep)).join(" "), "8:07 9:03 9:24 11:00");
+  const arr = journeysRange(net, SI["君津"], SI["千葉"], { mode: "arr", from: tm("9:00"), to: tm("11:00") }, O);
+  eq(arr.map(j => fmt(j.arr)).join(" "), "9:10 9:26 10:39");
+  for (const j of [...dep, ...arr]) if (dep.concat(arr).some(k => k.dep > j.dep && k.arr < j.arr)) throw new Error(legStr(j));
+});
+test("出発時刻指定 8:00（君津→千葉）：先頭は8:07発、前の便で7:44発、8:07発の次の便は9:03発", () => {
+  const base = journeys(net, SI["君津"], SI["千葉"], "dep", tm("8:00"), O);
+  eq(fmt(base[0].dep), "8:07");
+  const before = moreJourneys(net, SI["君津"], SI["千葉"], "dep", base, "before", O);
+  eq(before.length, 3); eq(fmt(before.at(-1).dep), "7:44", "一番近い前の便");
+  const after1 = moreJourneys(net, SI["君津"], SI["千葉"], "dep", [base[0]], "after", O);
+  eq(fmt(after1[0].dep), "9:03");
+  // 6件の一覧の次（9:03 は最初の6件に入っている）
+  const after = moreJourneys(net, SI["君津"], SI["千葉"], "dep", base, "after", O);
+  if (after.some(j => base.some(k => k.dep === j.dep))) throw new Error("重複");
+  if (!(after[0].dep > base.at(-1).dep)) throw new Error("一覧より後でない");
+});
+test("到着時刻指定 9:42（君津→千葉）：先頭（最終）は8:07発、次の便で9:03発（10:39着）が範囲外として加わる", () => {
+  const base = journeys(net, SI["君津"], SI["千葉"], "arr", tm("9:42"), O);
+  eq(fmt(base[0].dep), "8:07");
+  const after = moreJourneys(net, SI["君津"], SI["千葉"], "arr", base, "after", O);
+  eq(`${fmt(after[0].dep)}-${fmt(after[0].arr)}`, "9:03-10:39");
+  if (!(after[0].arr > tm("9:42"))) throw new Error("範囲外ではない");
+});
+test("前後の便：始発より前・最終より後はない", () => {
+  const first = journeysRange(net, SI["君津"], SI["千葉"], { mode: "dep", from: SERVICE_START, to: SERVICE_END }, O);
+  eq(moreJourneys(net, SI["君津"], SI["千葉"], "dep", [first[0]], "before", O).length, 0);
+  eq(moreJourneys(net, SI["君津"], SI["千葉"], "dep", [first.at(-1)], "after", O).length, 0);
+  eq(moreJourneys(net, SI["姉ヶ崎"], SI["長浦"], "dep", journeys(net, SI["姉ヶ崎"], SI["長浦"], "dep", tm("10:00"), O), "before", O).length, 0, "バスだけの区間");
+});
+test("路線図の1本前（千葉→君津）：20:05発（君津21:19着）。20:15発は最終と同じ21:58着なので数えない", () => {
+  const last = lastJourney(net, SI["千葉"], SI["君津"], O);
+  const p = prevBeforeLast(net, SI["千葉"], SI["君津"], last, O);
+  eq(`${fmt(p.dep)}-${fmt(p.arr)}`, "20:05-21:19", legStr(p));
+  eq(prevBeforeLast(net, SI["姉ヶ崎"], SI["長浦"], lastJourney(net, SI["姉ヶ崎"], SI["長浦"], O), O), null);
+});
+test("rideTime ＋ waitTime ＝ 所要時間（いろいろな経路で）", () => {
+  const pairs = [["君津", "千葉"], ["千葉", "安房鴨川"], ["新習志野", "館山"], ["姉ヶ崎", "木更津"], ["館山", "津田沼"]];
+  let n = 0;
+  for (const [a, b] of pairs) for (const j of journeysRange(net, SI[a], SI[b], { mode: "dep", from: SERVICE_START, to: SERVICE_END }, O)) {
+    eq(rideTime(j) + waitTime(j), j.arr - j.dep, legStr(j)); n++;
+    if (waitTime(j) < 0) throw new Error(legStr(j));
+  }
+  if (n < 30) throw new Error(`経路が少ない ${n}`);
+});
+test("journeys は段階7までと同じ結果（君津→千葉 8:00 出発、9:42 到着）", () => {
+  eq(journeys(net, SI["君津"], SI["千葉"], "dep", tm("8:00"), O).map(j => fmt(j.dep)).join(" "), "8:07 9:03 9:24 11:00 11:56 12:56");
+  eq(journeys(net, SI["君津"], SI["千葉"], "arr", tm("9:42"), O).map(j => fmt(j.dep)).join(" "), "8:07 7:44 6:52 5:41");
+});
+
 /* ===== バスの運行時間（FEEDBACK 段階2-1） ===== */
 test("運行時間 指定なし：千葉→長浦の最終は0:10発（バス0:31発）、未確認の注意が出る", () => {
   const j = lastJourney(net, SI["千葉"], SI["長浦"], O);
@@ -419,6 +481,28 @@ test("ビルド：スクリプトが構文エラーなし、偽の DOM 上で動
   el("dirUp").onclick(); // 上りに切り替え → 君津→千葉
   eq(el("mapSel").textContent, "君津 → 千葉"); // 見出しに「（上りの最終）」は付けない
   eq(el("from").value, SI["君津"]); eq(el("to").value, 0);
+  if (!el("mapResult").innerHTML.includes("1本前の便：")) throw new Error("路線図に1本前の便がない");
+  // 段階8：検索画面（君津→千葉、平日10:00に固定）
+  el("tabSearch").onclick();
+  el("from").value = String(SI["君津"]); el("to").value = String(SI["千葉"]); el("time").value = "08:00";
+  el("time").listeners.change();
+  const click = side => el("results").listeners.click({ target: { closest: () => ({ dataset: { more: side }, disabled: false }) } });
+  const cards = () => (el("results").innerHTML.match(/<article/g) || []).length;
+  const n0 = cards();
+  if (!el("results").innerHTML.startsWith('<div class="more"><button type="button" data-more="before">◀ 前の便')) throw new Error("上に前の便がない");
+  click("before");
+  eq(cards(), n0 + 3, "前の便で3件増える");
+  if (!/class="card outside"[\s\S]*指定時刻より前に出発/.test(el("results").innerHTML)) throw new Error("範囲外のラベルがない");
+  el("time").value = "08:01"; el("time").listeners.change();
+  eq(cards(), n0, "時刻を変えたらリセット");
+  el("sDur").onclick();
+  if (!el("results").innerHTML.includes("この条件で最短") || !el("results").innerHTML.includes("所要が最短なのは")) throw new Error("所要時間順の表示がない");
+  if (!/乗車\d*時?間?\d+分・待ち\d+分/.test(el("results").innerHTML)) throw new Error("乗車・待ちの表示がない");
+  eq(el("spanLab").hidden, false);
+  el("last").onclick();
+  eq(el("sortRow").hidden, true, "最終の表示中は並びの切り替えを隠す");
+  el("sDep").onclick(); el("now").onclick();
+  eq(el("sortRow").hidden, false);
 });
 
 /* ===== 段階7：PWA 版（site/） ===== */
